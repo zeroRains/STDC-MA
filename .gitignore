@@ -2,7 +2,6 @@ checkpoints
 data
 images
 .idea
-modules/DCNv2
 visiable
 .ipynb_checkpoints/*
 __pycache__

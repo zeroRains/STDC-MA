@@ -25,7 +25,7 @@ import datetime
 import argparse
 import setproctitle
 
-setproctitle.setproctitle("train_msc_fapn_rmi_stdc_zerorains")
+setproctitle.setproctitle("train_msc_fapn_rmi_stdc_camvid_zerorains")
 
 logger = logging.getLogger()
 # CUDA_ID = 3

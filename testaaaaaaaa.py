@@ -2,7 +2,7 @@ import torch
 # from thop import profile
 from models.model_stages import BiSeNet
 import matplotlib.pyplot as plt
-from torchsummary import summary
+# from torchsummary import summary
 
 
 def visual(module, inputs, outputs):
@@ -19,7 +19,7 @@ a = torch.rand((1, 3, 512, 1024))
 model = torch.load("checkpoints/train_STDC2-Seg/pths/model_maxmIOU50.pth",map_location="cuda:0")
 model.eval()
 
-summary(model, (3, 256, 512))
+# summary(model, (3, 256, 512))
 
 # for name, m in model.named_modules():
 #     # if isinstance(m, FeatureAlign_V2):

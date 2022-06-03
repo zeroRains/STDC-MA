@@ -30,6 +30,7 @@ class MscEvalV0(object):
     def __init__(self, scale=0.5, ignore_label=255):
         self.ignore_label = ignore_label
         self.scale = scale
+        self.epsilon = 1e-9
 
     def __call__(self, net, dl, n_classes, trick=None, patch=None, mask=None, scales=None):
         ## evaluate
@@ -77,9 +78,11 @@ class MscEvalV0(object):
                 label[keep] * n_classes + preds[keep],
                 minlength=n_classes ** 2
             ).view(n_classes, n_classes).float()
+            # print(hist)
+            # print(hist.diag() / (hist.sum(dim=0) + hist.sum(dim=1) - hist.diag()))
         if dist.is_initialized():
             dist.all_reduce(hist, dist.ReduceOp.SUM)
-        ious = hist.diag() / (hist.sum(dim=0) + hist.sum(dim=1) - hist.diag())
+        ious = (hist.diag()+self.epsilon) / (hist.sum(dim=0) + hist.sum(dim=1) - hist.diag()+self.epsilon)
         miou = ious.mean()
         return miou.item()
 

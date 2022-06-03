@@ -20,7 +20,9 @@ class CamVid(Dataset):
     # lables = ["sky", "building", "column pole", "road", "sidewalk", "tree", "sign symbol", "fence", "car", "pedestrian",
     #           "bicyclist"]
     # 参数为图像的根地址，和随机裁剪的尺寸
-    def __init__(self, rootpth, mode='train', *args, **kwargs):
+    def __init__(self, rootpth, cropsize=(640, 480),
+                 randomscale=(0.125, 0.25, 0.375, 0.5, 0.675, 0.75, 0.875, 1.0, 1.25, 1.5), mode='train', *args,
+                 **kwargs):
         super(CamVid, self).__init__(*args, **kwargs)
         # 确认数据集加载的类型
         assert mode in ('train', 'val', 'test')
@@ -54,6 +56,8 @@ class CamVid(Dataset):
                 contrast=0.5,
                 saturation=0.5),
             HorizontalFlip(),
+            RandomScale(randomscale),
+            RandomCrop(cropsize),
         ])
 
     def __getitem__(self, idx):
@@ -80,6 +84,7 @@ class CamVid(Dataset):
 
 if __name__ == "__main__":
     from tqdm import tqdm
+
     ds = CamVid('./data', mode='val')
     uni = []
     for im, lb in tqdm(ds):

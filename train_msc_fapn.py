@@ -211,7 +211,6 @@ def train():
                     batch_size=n_img_per_gpu,
                     shuffle=False,
                     num_workers=n_workers_train,
-
                     pin_memory=False,
                     drop_last=True)
     # exit(0)
@@ -329,10 +328,13 @@ def train():
 
         if (not use_boundary_2) and (not use_boundary_4) and (not use_boundary_8):
             out, out16, out32 = net(im)
+
         # 这个就是一个改了一下的交叉熵
         lossp = criteria_p(out, lb)
         loss2 = criteria_16(out16, lb)
         loss3 = criteria_32(out32, lb)
+        print(lossp, loss2, loss3)
+        print("\n")
 
         boundery_bce_loss = 0.
         boundery_dice_loss = 0.

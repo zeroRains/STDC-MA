@@ -1,6 +1,6 @@
 import torch
 
-from models.model_stages_SNL import BiSeNet
+from models.model_stages_msc import BiSeNet
 
 # model = torch.nn.Linear(3, 100)
 # 新模型
@@ -14,6 +14,7 @@ originParams = torch.load("./checkpoints/STDC2-Seg/model_maxmIOU75.pth", map_loc
 # 获取新模型的参数
 modelDict = model.state_dict()
 print("应该可以吧")
+a = torch.rand((1, 3, 970, 720))
 # 如果只加不删的话可以跳过这行，这里是从旧模型中拉去新模型中有的层
 pullDict = {name: value for name, value in originParams.items() if name in modelDict.keys()}
 # 去除最后一曾，类数发生改变时使用下面三行，否则不需要使用
@@ -24,6 +25,7 @@ del pullDict["conv_out32.conv_out.weight"]
 modelDict.update(pullDict)
 # 向新模型中加载参数
 model.load_state_dict(modelDict)
+model(a)
 # 保存模型
-torch.save(model.state_dict(), "STDC2optimMFC.pth")
+torch.save(model.state_dict(), "STDC2optimMSC_CamVid.pth")
 print("save finished!")

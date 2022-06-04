@@ -175,11 +175,11 @@ class ContextPath(nn.Module):
         avg = self.conv_avg(avg)
         # 然后又做一个上采样样恢复成原图尺寸？
         avg_up = F.interpolate(avg, (H32, W32), mode='nearest')
-        feat32_sum = self.arm32(feat32, avg_up)
+        feat32_sum = self.arm32(feat32) + avg_up
         feat32_up = F.interpolate(feat32_sum, (H16, W16), mode='nearest')
         feat32_up = self.conv_head32(feat32_up)
 
-        feat16_sum = self.arm16(feat16, feat32_up)
+        feat16_sum = self.arm16(feat16) + feat32_up
         feat16_up = F.interpolate(feat16_sum, (H8, W8), mode='nearest')
         feat16_up = self.conv_head16(feat16_up)
         # 第二个ARM模块(结构图从上往下看)

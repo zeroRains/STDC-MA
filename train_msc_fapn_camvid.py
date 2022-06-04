@@ -69,7 +69,7 @@ def parse_args():
         '--n_img_per_gpu',
         dest='n_img_per_gpu',
         type=int,
-        default=12,
+        default=16,
     )
     # 最大迭代次数
     parse.add_argument(
@@ -182,7 +182,7 @@ def train():
     # 设置日志文件
     setup_logger(args.respath)
     ## dataset
-    n_classes = 32
+    n_classes = 11
     n_img_per_gpu = args.n_img_per_gpu
     n_workers_train = args.n_workers_train
     n_workers_val = args.n_workers_val
@@ -315,7 +315,7 @@ def train():
             out, out16, out32 = net(im)
 
         # 这个就是一个改了一下的交叉熵
-
+        # print(out.shape)
         lossp = criteria_p(out, lb)
         loss2 = criteria_16(out16, lb)
         loss3 = criteria_32(out32, lb)
@@ -404,7 +404,7 @@ def train():
             with torch.no_grad():
                 scales = [0.5, 1.0, 1.5, 2.0]
 
-                single_scale2 = MscEvalV0(scale=1)
+                single_scale2 = MscEvalV0(scale=1, ignore_label=11)
                 mIOU75 = single_scale2(net, dlval, n_classes, scales=scales)
 
             save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU_{}.pth'

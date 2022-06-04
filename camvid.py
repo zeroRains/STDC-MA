@@ -32,15 +32,15 @@ class CamVid(Dataset):
         print('self.mode', self.mode)
         ## parse img directory
         # 获取图片，将图片的路径存放在{名字：路径}的字典中
-        img_list_file = rootpth + "/camvid32/" + self.mode + ".txt"
-        root_img_path = rootpth + "/camvid32/camvid/images/"
-        root_label_path = rootpth + "/camvid32/camvid/labels/"
+        img_list_file = rootpth + "/camvid/" + self.mode + ".txt"
+        root_img_path = rootpth + "/camvid/images/"
+        root_label_path = rootpth + "/camvid/labels/"
         with open(img_list_file, "r") as f:
             img_file_name = f.readlines()
             for data in img_file_name:
                 data = data.strip()
                 self.img.append(root_img_path + data)
-                self.label.append(root_label_path + data.replace('.png', '_P.png'))
+                self.label.append(root_label_path + data)
 
         self.len = len(self.img)
         print('self.len', self.mode, self.len)

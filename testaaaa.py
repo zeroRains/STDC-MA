@@ -4,7 +4,7 @@ from models.model_stages_SNL import BiSeNet
 
 # model = torch.nn.Linear(3, 100)
 # 新模型
-model = BiSeNet(backbone="STDCNet1446", n_classes=32, pretrain_model=None, use_boundary_2=False, use_boundary_4=False,
+model = BiSeNet(backbone="STDCNet1446", n_classes=11, pretrain_model=None, use_boundary_2=False, use_boundary_4=False,
                 use_boundary_8=True, use_boundary_16=False, use_conv_last=False)
 
 print("加载成功")

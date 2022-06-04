@@ -74,6 +74,7 @@ class MscEvalV0(object):
             # preds就是最后的分割结果
             # 后面就是MIOU的计算了
             keep = label != self.ignore_label
+
             hist += torch.bincount(
                 label[keep] * n_classes + preds[keep],
                 minlength=n_classes ** 2

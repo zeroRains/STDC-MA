@@ -3,9 +3,9 @@ data
 images
 .idea
 visiable
+logs
 .ipynb_checkpoints/*
 __pycache__
-logs/*
 *.pth
 *.jpg
 *.pyc

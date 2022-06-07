@@ -1,6 +1,6 @@
 import torch
 
-from models.model_stages_msc import BiSeNet
+from models.model_stages import BiSeNet
 
 # model = torch.nn.Linear(3, 100)
 # 新模型
@@ -27,5 +27,5 @@ modelDict.update(pullDict)
 model.load_state_dict(modelDict)
 model(a)
 # 保存模型
-torch.save(model.state_dict(), "STDC2optimMSC_CamVid.pth")
+torch.save(model.state_dict(), "STDC2optim_CamVid.pth")
 print("save finished!")

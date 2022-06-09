@@ -130,7 +130,15 @@ class CityScapes(Dataset):
 
 if __name__ == "__main__":
     from tqdm import tqdm
-    ds = CityScapes('./data/',  mode='val')
+    # 训练集
+    # 参数如下：
+    # dspth：数据集的路径（不带），字符串
+    # cropsize：输入图像要经过缩放后输出的最终结果(默认：(640, 480))，列表/元组，如[1024, 512]
+    # mode：训练集类型，字符串，val表示验证集，train表示训练集，
+    # randomscale：这个是随机缩放的比例，列表/元组，如：(0.125, 0.25, 0.375, 0.5, 0.675, 0.75, 0.875, 1.0, 1.25, 1.5)
+    ds = CityScapes('/home/disk2/ray/datasets/cityscapes/',  mode='val')
+    # 验证集（测试集好像是不公开的，用验证集就行）
+    # ds = CityScapes('./data/', mode='val')
     uni = []
     for im, lb in tqdm(ds):
         lb_uni = np.unique(lb).tolist()

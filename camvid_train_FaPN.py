@@ -26,7 +26,7 @@ import datetime
 import argparse
 import setproctitle
 
-setproctitle.setproctitle("train_stdc_camvid_zerorains")
+setproctitle.setproctitle("train_fapn_stdc_camvid_zerorains")
 
 logger = logging.getLogger()
 CUDA_ID = 3
@@ -109,7 +109,7 @@ def parse_args():
         '--respath',
         dest='respath',
         type=str,
-        default="checkpoints/camvid_STDC2-Seg/",
+        default="checkpoints/FaPN_optim_camvid_STDC2-Seg/",
     )
     # 主干网络
     parse.add_argument(
@@ -225,7 +225,7 @@ def train():
     net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
                   use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
                   use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
-    net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optim_CamVid.pth"))
+    net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optimFAPN_CamVid.pth"))
     net.cuda()
     net.train()
 
@@ -281,7 +281,7 @@ def train():
     diter = iter(dl)
     epoch = 0
 
-    tensor_board_path = os.path.join("./logs", "camvid_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
+    tensor_board_path = os.path.join("./logs", "fapn_camvid_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
     os.mkdir(tensor_board_path)
     visual = SummaryWriter(tensor_board_path)
     for it in range(max_iter):
@@ -402,10 +402,8 @@ def train():
             # ## evaluator
             logger.info('compute the mIOU')
             with torch.no_grad():
-                scales = [0.5, 1.0, 1.5, 2.0]
-
                 single_scale2 = MscEvalV0(scale=1, ignore_label=11)
-                mIOU75 = single_scale2(net, dlval, n_classes, scales=scales)
+                mIOU75 = single_scale2(net, dlval, n_classes)
 
             save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU_{}.pth'
                                 .format(it + 1, str(round(mIOU75, 4))))

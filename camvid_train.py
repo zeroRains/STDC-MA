@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 from logger import setup_logger
 
-from models.model_stages_msc_fapn import BiSeNet
+from models.model_stages import BiSeNet
 
 from camvid import CamVid
 from loss.loss import OhemCELoss, RMILoss
@@ -24,13 +24,13 @@ import logging
 import time
 import datetime
 import argparse
-import setproctitle
 
-setproctitle.setproctitle("train_msc_fapn_rmi_stdc_camvid_zerorains")
+import setproctitle
+setproctitle.setproctitle("train_stdc_camvid_zerorains")
 
 logger = logging.getLogger()
-# CUDA_ID = 3
-# torch.cuda.set_device(CUDA_ID)
+CUDA_ID = 3
+torch.cuda.set_device(CUDA_ID)
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
@@ -69,14 +69,14 @@ def parse_args():
         '--n_img_per_gpu',
         dest='n_img_per_gpu',
         type=int,
-        default=16,
+        default=12,
     )
     # 最大迭代次数
     parse.add_argument(
         '--max_iter',
         dest='max_iter',
         type=int,
-        default=80000,
+        default=100000,
     )
     # 保存频率
     parse.add_argument(
@@ -109,7 +109,7 @@ def parse_args():
         '--respath',
         dest='respath',
         type=str,
-        default="checkpoints/MSC_FaPN_RMI_optim_camvid_STDC2-Seg/",
+        default="checkpoints/camvid_STDC2-Seg/",
     )
     # 主干网络
     parse.add_argument(
@@ -225,7 +225,7 @@ def train():
     net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
                   use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
                   use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
-    net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optimMFC.pth"))
+    net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optim_CamVid.pth"))
     net.cuda()
     net.train()
 
@@ -281,7 +281,7 @@ def train():
     diter = iter(dl)
     epoch = 0
 
-    tensor_board_path = os.path.join("./logs", "msc_camvid_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
+    tensor_board_path = os.path.join("./logs", "camvid_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
     os.mkdir(tensor_board_path)
     visual = SummaryWriter(tensor_board_path)
     for it in range(max_iter):
@@ -402,10 +402,8 @@ def train():
             # ## evaluator
             logger.info('compute the mIOU')
             with torch.no_grad():
-                scales = [0.5, 1.0, 1.5, 2.0]
-
                 single_scale2 = MscEvalV0(scale=1, ignore_label=11)
-                mIOU75 = single_scale2(net, dlval, n_classes, scales=scales)
+                mIOU75 = single_scale2(net, dlval, n_classes)
 
             save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU_{}.pth'
                                 .format(it + 1, str(round(mIOU75, 4))))
@@ -429,7 +427,7 @@ def train():
                 logger.info('max mIOU model saved to: {}'.format(save_pth))
             visual.add_scalar("MIOU", mIOU75, (it + 1) // save_iter_sep)
             logger.info(' maxmIOU is: {}.'.format(maxmIOU75))
-            torch.cuda.empty_cache();
+            torch.cuda.empty_cache()
             net.train()
 
     ## dump the final model

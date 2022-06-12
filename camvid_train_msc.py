@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 from logger import setup_logger
 
-from models.model_stages_FaPN import BiSeNet
+from models.model_stages_msc import BiSeNet
 
 from camvid import CamVid
 from loss.loss import OhemCELoss, RMILoss
@@ -26,7 +26,7 @@ import datetime
 import argparse
 import setproctitle
 
-setproctitle.setproctitle("train_fapn_stdc_camvid_zerorains")
+setproctitle.setproctitle("train_msc_stdc_camvid_zerorains")
 
 logger = logging.getLogger()
 CUDA_ID = 3
@@ -69,21 +69,21 @@ def parse_args():
         '--n_img_per_gpu',
         dest='n_img_per_gpu',
         type=int,
-        default=16,
+        default=12,
     )
     # 最大迭代次数
     parse.add_argument(
         '--max_iter',
         dest='max_iter',
         type=int,
-        default=80000,
+        default=100000,
     )
     # 保存频率
     parse.add_argument(
         '--save_iter_sep',
         dest='save_iter_sep',
         type=int,
-        default=1000,
+        default=1000
     )
     parse.add_argument(
         '--warmup_steps',
@@ -109,7 +109,7 @@ def parse_args():
         '--respath',
         dest='respath',
         type=str,
-        default="checkpoints/FaPN_optim_camvid_STDC2-Seg/",
+        default="checkpoints/MSC_optim_camvid_STDC2-Seg/",
     )
     # 主干网络
     parse.add_argument(
@@ -221,20 +221,22 @@ def train():
                        drop_last=False)
 
     ## model
-    ignore_idx = 255
-    net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
-                  use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
-                  use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
-    net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optimFAPN_CamVid.pth"))
+    ignore_idx = 11
+    # net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
+    #               use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
+    #               use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
+    # net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/checkpoints/MSC_optim_camvid_STDC2-Seg/pths/model_maxmIOU.pth"))
+    net = torch.load(
+        "/home/disk2/ray/workspace/zerorains/stdc/checkpoints/MSC_optim_camvid_STDC2-Seg/pths/model_maxmIOU.pth")
     net.cuda()
     net.train()
 
     score_thres = 0.7
     # 最少需要考虑总数样本的1/16
     n_min = n_img_per_gpu * cropsize[0] * cropsize[1] // 16
-    # criteria_p = OhemCELoss(thresh=score_thres, n_min=n_min, ignore_lb=ignore_idx)
+    criteria_p = RMILoss(num_classes=n_classes)
 
-    criteria_p = OhemCELoss(thresh=score_thres, n_min=n_min, ignore_lb=ignore_idx)
+    # criteria_p = OhemCELoss(thresh=score_thres, n_min=n_min, ignore_lb=ignore_idx)
 
     criteria_16 = OhemCELoss(thresh=score_thres, n_min=n_min, ignore_lb=ignore_idx)
 
@@ -281,7 +283,7 @@ def train():
     diter = iter(dl)
     epoch = 0
 
-    tensor_board_path = os.path.join("./logs", "fapn_camvid_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
+    tensor_board_path = os.path.join("./logs", "msc_camvid_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
     os.mkdir(tensor_board_path)
     visual = SummaryWriter(tensor_board_path)
     for it in range(max_iter):
@@ -346,6 +348,7 @@ def train():
             boundery_bce_loss += boundery_bce_loss8
             boundery_dice_loss += boundery_dice_loss8
         # print(lossp)
+        # print(lossp.item(), loss2.item(), loss3.item(), boundery_bce_loss.item(), boundery_dice_loss.item())
         loss = lossp + loss2 + loss3 + boundery_bce_loss + boundery_dice_loss
         # print(loss)
         loss.backward()

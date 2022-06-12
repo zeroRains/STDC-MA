@@ -4,9 +4,9 @@ from tqdm import tqdm
 
 from logger import setup_logger
 
-from models.model_stages_msc import BiSeNet
+from models.model_stages import BiSeNet
 
-from camvid import CamVid
+from pascalvoc import PascalVoc
 from loss.loss import OhemCELoss, RMILoss
 from loss.detail_loss import DetailAggregateLoss
 from evaluation import MscEvalV0
@@ -18,20 +18,20 @@ from torch.utils.data import DataLoader
 import torch.nn.functional as F
 # import torch.distributed as dist
 
+
 import os
 import os.path as osp
 import logging
 import time
 import datetime
 import argparse
+
 import setproctitle
-
-setproctitle.setproctitle("train_msc_stdc_camvid_zerorains")
-
+setproctitle.setproctitle("train_stdc_pascalvoc_zerorains")
 logger = logging.getLogger()
-CUDA_ID = 3
+CUDA_ID = 1
 torch.cuda.set_device(CUDA_ID)
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 def str2bool(v):
@@ -56,7 +56,7 @@ def parse_args():
         '--n_workers_train',
         dest='n_workers_train',
         type=int,
-        default=12,
+        default=1,
     )
     parse.add_argument(
         '--n_workers_val',
@@ -69,21 +69,21 @@ def parse_args():
         '--n_img_per_gpu',
         dest='n_img_per_gpu',
         type=int,
-        default=16,
+        default=32,
     )
     # 最大迭代次数
     parse.add_argument(
         '--max_iter',
         dest='max_iter',
         type=int,
-        default=80000,
+        default=100000,
     )
     # 保存频率
     parse.add_argument(
         '--save_iter_sep',
         dest='save_iter_sep',
         type=int,
-        default=1000
+        default=1000,
     )
     parse.add_argument(
         '--warmup_steps',
@@ -109,7 +109,7 @@ def parse_args():
         '--respath',
         dest='respath',
         type=str,
-        default="checkpoints/MSC_optim_camvid_STDC2-Seg/",
+        default="checkpoints/pascal_voc_STDC2-Seg/",
     )
     # 主干网络
     parse.add_argument(
@@ -163,8 +163,7 @@ def train():
     # 设置模型保存路径
     save_pth_path = os.path.join(args.respath, 'pths')
     dspth = './data'
-    cropsize = [960, 720]
-    randomscale = (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.375, 1.5)
+    cropsize = [320, 480]
     print(save_pth_path)
     print(osp.exists(save_pth_path))
     # if not osp.exists(save_pth_path) and dist.get_rank()==0:
@@ -182,7 +181,7 @@ def train():
     # 设置日志文件
     setup_logger(args.respath)
     ## dataset
-    n_classes = 11
+    n_classes = 21
     n_img_per_gpu = args.n_img_per_gpu
     n_workers_train = args.n_workers_train
     n_workers_val = args.n_workers_val
@@ -203,7 +202,7 @@ def train():
     #     logger.info('mode: {}'.format(args.mode))
     # 加载数据集
 
-    ds = CamVid(dspth, cropsize=cropsize, mode=mode, randomscale=randomscale)
+    ds = PascalVoc(dspth, cropsize=cropsize, mode=mode)
     # sampler = torch.utils.data.distributed.DistributedSampler(ds)
     dl = DataLoader(ds,
                     batch_size=n_img_per_gpu,
@@ -212,10 +211,10 @@ def train():
                     pin_memory=False,
                     drop_last=True)
     # exit(0)
-    dsval = CamVid(dspth, mode='val', randomscale=randomscale)
+    dsval = PascalVoc(dspth, mode='val')
     # sampler_val = torch.utils.data.distributed.DistributedSampler(dsval)
     dlval = DataLoader(dsval,
-                       batch_size=2,
+                       batch_size=1,
                        shuffle=False,
                        num_workers=n_workers_val,
                        drop_last=False)
@@ -225,7 +224,7 @@ def train():
     net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
                   use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
                   use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
-    net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optimMSC_CamVid.pth"))
+    # net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optim_CamVid.pth"))
     net.cuda()
     net.train()
 
@@ -269,7 +268,7 @@ def train():
     #     max_iter=max_iter,
     #     power=power)
 
-    optim = torch.optim.Adam(net.parameters(), lr=0.0001, betas=(0.9, 0.999),
+    optim = torch.optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.999),
                              eps=1e-08,
                              weight_decay=0)
     ## train loop
@@ -281,7 +280,7 @@ def train():
     diter = iter(dl)
     epoch = 0
 
-    tensor_board_path = os.path.join("./logs", "msc_camvid_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
+    tensor_board_path = os.path.join("./logs", "pascal_voc_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
     os.mkdir(tensor_board_path)
     visual = SummaryWriter(tensor_board_path)
     for it in range(max_iter):
@@ -402,10 +401,8 @@ def train():
             # ## evaluator
             logger.info('compute the mIOU')
             with torch.no_grad():
-                scales = [0.5, 1.0, 1.5, 2.0]
-
-                single_scale2 = MscEvalV0(scale=1, ignore_label=11)
-                mIOU75 = single_scale2(net, dlval, n_classes, scales=scales)
+                single_scale2 = MscEvalV0(scale=1, ignore_label=255)
+                mIOU75 = single_scale2(net, dlval, n_classes)
 
             save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU_{}.pth'
                                 .format(it + 1, str(round(mIOU75, 4))))

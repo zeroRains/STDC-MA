@@ -1,16 +1,17 @@
 #!/usr/bin/python
 # -*- encoding: utf-8 -*-
+from tqdm import tqdm
 
 from logger import setup_logger
 
-from models.model_stages import BiSeNet
+from models.model_stages_msc_fapn import BiSeNet
 
-from cityscapes import CityScapes
-from loss.loss import OhemCELoss
+from camvid import CamVid
+from loss.loss import OhemCELoss, RMILoss
 from loss.detail_loss import DetailAggregateLoss
 from evaluation import MscEvalV0
 from optimizer_loss import Optimizer
-
+from torch.utils.tensorboard import SummaryWriter
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -23,10 +24,14 @@ import logging
 import time
 import datetime
 import argparse
+import setproctitle
+
+setproctitle.setproctitle("train_msc_stdc_camvid_zerorains")
 
 logger = logging.getLogger()
 CUDA_ID = 3
 torch.cuda.set_device(CUDA_ID)
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 def str2bool(v):
@@ -64,21 +69,21 @@ def parse_args():
         '--n_img_per_gpu',
         dest='n_img_per_gpu',
         type=int,
-        default=8,
+        default=12,
     )
     # 最大迭代次数
     parse.add_argument(
         '--max_iter',
         dest='max_iter',
         type=int,
-        default=150000,
+        default=100000,
     )
     # 保存频率
     parse.add_argument(
         '--save_iter_sep',
         dest='save_iter_sep',
         type=int,
-        default=1000,
+        default=1000
     )
     parse.add_argument(
         '--warmup_steps',
@@ -97,14 +102,14 @@ def parse_args():
         '--ckpt',
         dest='ckpt',
         type=str,
-        default="./checkpoints/STDC2-Seg/model_maxmIOU75.pth",
+        default="",
     )
     # 模型路径
     parse.add_argument(
         '--respath',
         dest='respath',
         type=str,
-        default="checkpoints/GCT_optim_STDC2-Seg/",
+        default="checkpoints/MSC_RMI_FAPN_optim_camvid_STDC2-Seg/",
     )
     # 主干网络
     parse.add_argument(
@@ -158,7 +163,8 @@ def train():
     # 设置模型保存路径
     save_pth_path = os.path.join(args.respath, 'pths')
     dspth = './data'
-
+    cropsize = [960, 720]
+    randomscale = (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.375, 1.5)
     print(save_pth_path)
     print(osp.exists(save_pth_path))
     # if not osp.exists(save_pth_path) and dist.get_rank()==0:
@@ -176,7 +182,7 @@ def train():
     # 设置日志文件
     setup_logger(args.respath)
     ## dataset
-    n_classes = 19
+    n_classes = 11
     n_img_per_gpu = args.n_img_per_gpu
     n_workers_train = args.n_workers_train
     n_workers_val = args.n_workers_val
@@ -186,10 +192,6 @@ def train():
     use_boundary_2 = args.use_boundary_2
 
     mode = args.mode
-    # 输出尺寸
-    cropsize = [1024, 512]
-    # 随机缩放
-    randomscale = (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.375, 1.5)
 
     # if dist.get_rank()==0:
     #     logger.info('n_workers_train: {}'.format(n_workers_train))
@@ -200,7 +202,8 @@ def train():
     #     logger.info('use_boundary_16: {}'.format(use_boundary_16))
     #     logger.info('mode: {}'.format(args.mode))
     # 加载数据集
-    ds = CityScapes(dspth, cropsize=cropsize, mode=mode, randomscale=randomscale)
+
+    ds = CamVid(dspth, cropsize=cropsize, mode=mode, randomscale=randomscale)
     # sampler = torch.utils.data.distributed.DistributedSampler(ds)
     dl = DataLoader(ds,
                     batch_size=n_img_per_gpu,
@@ -209,7 +212,7 @@ def train():
                     pin_memory=False,
                     drop_last=True)
     # exit(0)
-    dsval = CityScapes(dspth, mode='val', randomscale=randomscale)
+    dsval = CamVid(dspth, mode='val', randomscale=randomscale)
     # sampler_val = torch.utils.data.distributed.DistributedSampler(dsval)
     dlval = DataLoader(dsval,
                        batch_size=2,
@@ -218,32 +221,37 @@ def train():
                        drop_last=False)
 
     ## model
-    ignore_idx = 255
+    ignore_idx = 11
     # net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
     #               use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
     #               use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
-    # net = torch.load("./checkpoints/train_STDC2-Seg/pths/model_maxmIOU75.pth")
-    net = torch.load("STDC2optimGCT.pth")
-    # print(net)
-    # exit(0)
-    net.cuda(CUDA_ID)
+    # originParams = torch.load("/home/disk2/ray/workspace/zerorains/stdc/checkpoints/MSC_RMI_FAPN_optim_camvid_STDC2-Seg/pths/bestResult.pth", map_location="cpu")
+    net = torch.load(
+        "/home/disk2/ray/workspace/zerorains/stdc/checkpoints/MSC_RMI_FAPN_optim_camvid_STDC2-Seg/pths/bestResult.pth")
+    # modelDict = net.state_dict()
+    # pullDict = {name: value for name, value in originParams.items() if name in modelDict.keys()}
+    # modelDict.update(pullDict)
+    # net.load_state_dict(modelDict)
+    # net.state_dict(torch.load(
+    #     ""))
+    net.cuda()
     net.train()
-    # net = nn.parallel.DistributedDataParallel(net,
-    #                                           device_ids=[args.local_rank, ],
-    #                                           output_device=args.local_rank,
-    #                                           find_unused_parameters=True
-    #                                           )
 
     score_thres = 0.7
-    # 这个算的什么我也看不明白，batch*h*w//16
+    # 最少需要考虑总数样本的1/16
     n_min = n_img_per_gpu * cropsize[0] * cropsize[1] // 16
-    criteria_p = OhemCELoss(thresh=score_thres, n_min=n_min, ignore_lb=ignore_idx)
+    criteria_p = RMILoss(num_classes=n_classes)
+
+    # criteria_p = OhemCELoss(thresh=score_thres, n_min=n_min, ignore_lb=ignore_idx)
+
     criteria_16 = OhemCELoss(thresh=score_thres, n_min=n_min, ignore_lb=ignore_idx)
+
     criteria_32 = OhemCELoss(thresh=score_thres, n_min=n_min, ignore_lb=ignore_idx)
+
     # 细节损失
     boundary_loss_func = DetailAggregateLoss()
+
     ## optimizer
-    maxmIOU50 = 0.
     maxmIOU75 = 0.
     momentum = 0.9
     weight_decay = 5e-4
@@ -268,6 +276,7 @@ def train():
     #     warmup_start_lr=warmup_start_lr,
     #     max_iter=max_iter,
     #     power=power)
+
     optim = torch.optim.Adam(net.parameters(), lr=0.0001, betas=(0.9, 0.999),
                              eps=1e-08,
                              weight_decay=0)
@@ -279,6 +288,10 @@ def train():
     st = glob_st = time.time()
     diter = iter(dl)
     epoch = 0
+
+    tensor_board_path = os.path.join("./logs", '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')) + "_msc_fapn_rmi_camvid")
+    os.mkdir(tensor_board_path)
+    visual = SummaryWriter(tensor_board_path)
     for it in range(max_iter):
         try:
             # 遍历数据集
@@ -290,8 +303,8 @@ def train():
             diter = iter(dl)
             im, lb = next(diter)
         #     加入到cuda中
-        im = im.cuda(CUDA_ID)
-        lb = lb.cuda(CUDA_ID)
+        im = im.cuda()
+        lb = lb.cuda()
         H, W = im.size()[2:]
         lb = torch.squeeze(lb, 1)
 
@@ -308,11 +321,14 @@ def train():
 
         if (not use_boundary_2) and (not use_boundary_4) and (not use_boundary_8):
             out, out16, out32 = net(im)
+
         # 这个就是一个改了一下的交叉熵
+        # print(out.shape)
         lossp = criteria_p(out, lb)
         loss2 = criteria_16(out16, lb)
         loss3 = criteria_32(out32, lb)
-
+        # print(lossp, loss2, loss3)
+        # print("\n")
         boundery_bce_loss = 0.
         boundery_dice_loss = 0.
 
@@ -337,20 +353,21 @@ def train():
             boundery_bce_loss8, boundery_dice_loss8 = boundary_loss_func(detail8, lb)
             boundery_bce_loss += boundery_bce_loss8
             boundery_dice_loss += boundery_dice_loss8
-
+        # print(lossp)
+        # print(lossp.item(), loss2.item(), loss3.item(), boundery_bce_loss.item(), boundery_dice_loss.item())
         loss = lossp + loss2 + loss3 + boundery_bce_loss + boundery_dice_loss
-
+        # print(loss)
         loss.backward()
         optim.step()
 
         loss_avg.append(loss.item())
-
         loss_boundery_bce.append(boundery_bce_loss.item())
         loss_boundery_dice.append(boundery_dice_loss.item())
-
+        torch.cuda.empty_cache()
         ## print training log message
         if (it + 1) % msg_iter == 0:
             loss_avg = sum(loss_avg) / len(loss_avg)
+            visual.add_scalar("total-loss", loss_avg, it)
             # lr = optim.lr
             lr = optim.defaults["lr"]
             ed = time.time()
@@ -387,52 +404,41 @@ def train():
 
             # print(boundary_loss_func.get_params())
         if (it + 1) % save_iter_sep == 0:  # and it != 0:
-
             ## model
             logger.info('evaluating the model ...')
             logger.info('setup and restore model')
-
             net.eval()
-
             # ## evaluator
             logger.info('compute the mIOU')
             with torch.no_grad():
-                single_scale1 = MscEvalV0()
-                mIOU50 = single_scale1(net, dlval, n_classes)
+                scales = [0.5, 1.0, 1.5, 2.0]
 
-                single_scale2 = MscEvalV0(scale=0.75)
-                mIOU75 = single_scale2(net, dlval, n_classes)
+                single_scale2 = MscEvalV0(scale=1, ignore_label=11)
+                mIOU75 = single_scale2(net, dlval, n_classes, scales=scales)
 
-            save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU50_{}_mIOU75_{}.pth'
-                                .format(it + 1, str(round(mIOU50, 4)), str(round(mIOU75, 4))))
-            # torch.save(net, save_pth)
+            save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU_{}.pth'
+                                .format(it + 1, str(round(mIOU75, 4))))
+            torch.save(net, save_pth)
             # state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
             # if dist.get_rank()==0:
             # torch.save(state, save_pth)
 
             logger.info('training iteration {}, model saved to: {}'.format(it + 1, save_pth))
-            logger.info('mIOU50 is: {}, mIOU75 is: {}'.format(mIOU50, mIOU75))
+            logger.info(' mIOU is: {}'.format(mIOU75))
             # exit(0)
             # exit(1)
-            if mIOU50 > maxmIOU50:
-                maxmIOU50 = mIOU50
-                save_pth = osp.join(save_pth_path, 'model_maxmIOU50.pth'.format(it + 1))
-                # state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
-                # # if dist.get_rank()==0:
-                # torch.save(state, save_pth)
-                torch.save(net, save_pth)
-                logger.info('max mIOU model saved to: {}'.format(save_pth))
 
             if mIOU75 > maxmIOU75:
                 maxmIOU75 = mIOU75
-                save_pth = osp.join(save_pth_path, 'model_maxmIOU75.pth'.format(it + 1))
+                save_pth = osp.join(save_pth_path, 'model_maxmIOU.pth'.format(it + 1))
                 # state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
                 # if dist.get_rank()==0:
                 # torch.save(state, save_pth)
                 torch.save(net, save_pth)
                 logger.info('max mIOU model saved to: {}'.format(save_pth))
-            logger.info('maxmIOU50 is: {}, maxmIOU75 is: {}.'.format(maxmIOU50, maxmIOU75))
-
+            visual.add_scalar("MIOU", mIOU75, (it + 1) // save_iter_sep)
+            logger.info(' maxmIOU is: {}.'.format(maxmIOU75))
+            torch.cuda.empty_cache()
             net.train()
 
     ## dump the final model
@@ -441,6 +447,7 @@ def train():
     # state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
     # if dist.get_rank()==0:
     # torch.save(state, save_pth)
+    visual.close()
     torch.save(net, save_pth)
     logger.info('training done, model saved to: {}'.format(save_pth))
     print('epoch: ', epoch)

@@ -20,9 +20,9 @@ from tqdm import tqdm
 import math
 from thop import profile
 
-cuda_id = 3
-# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
-torch.cuda.set_device(cuda_id)
+# cuda_id = 3
+# # os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# torch.cuda.set_device(cuda_id)
 
 
 class MscEvalV0(object):
@@ -34,7 +34,7 @@ class MscEvalV0(object):
 
     def __call__(self, net, dl, n_classes, trick=None, patch=None, mask=None, scales=None):
         ## evaluate
-        hist = torch.zeros(n_classes, n_classes).cuda(cuda_id).detach()
+        hist = torch.zeros(n_classes, n_classes).cuda().detach()
         if dist.is_initialized() and dist.get_rank() != 0:
             diter = enumerate(dl)
         else:
@@ -42,10 +42,10 @@ class MscEvalV0(object):
         for i, (imgs, label) in diter:
             N, _, H, W = label.shape
 
-            label = label.squeeze(1).cuda(cuda_id)
+            label = label.squeeze(1).cuda()
             size = label.size()[-2:]
 
-            imgs = imgs.cuda(cuda_id)
+            imgs = imgs.cuda()
             if not isinstance(trick, type(None)) \
                     and not isinstance(patch, type(None)) \
                     and not isinstance(mask, type(None)):
@@ -126,7 +126,7 @@ def evaluatev0(respth='./pretrained', dspth='./data', backbone='CatNetSmall', sc
     # print('FLOPs = ' + str(flops / 1000 ** 3) + 'G')
     # print('Params = ' + str(params / 1000 ** 2) + 'M')
     # exit(0)
-    net.cuda(cuda_id)
+    net.cuda()
 
     # 开始验证
     with torch.no_grad():
@@ -161,7 +161,7 @@ class MscEval(object):
 
     def pad_tensor(self, inten, size):
         N, C, H, W = inten.size()
-        outten = torch.zeros(N, C, size[0], size[1]).cuda(cuda_id)
+        outten = torch.zeros(N, C, size[0], size[1]).cuda()
         outten.requires_grad = False
         margin_h, margin_w = size[0] - H, size[1] - W
         hst, hed = margin_h // 2, margin_h // 2 + H
@@ -200,7 +200,7 @@ class MscEval(object):
             N, C, H, W = im.size()
             n_x = math.ceil((W - cropsize) / stride) + 1
             n_y = math.ceil((H - cropsize) / stride) + 1
-            prob = torch.zeros(N, self.n_classes, H, W).cuda(cuda_id)
+            prob = torch.zeros(N, self.n_classes, H, W).cuda()
             prob.requires_grad = False
             for iy in range(n_y):
                 for ix in range(n_x):
@@ -241,7 +241,7 @@ class MscEval(object):
             N, _, H, W = label.shape
             probs = torch.zeros((N, self.n_classes, H, W))
             probs.requires_grad = False
-            imgs = imgs.cuda(cuda_id)
+            imgs = imgs.cuda()
             for sc in self.scales:
                 # prob = self.scale_crop_eval(imgs, sc)
                 prob = self.eval_chip(imgs)
@@ -269,7 +269,7 @@ def evaluate(respth='./resv1_catnet/pths/', dspth='./data'):
     net = BiSeNet(n_classes=n_classes)
 
     net.load_state_dict(torch.load(respth))
-    net.cuda(cuda_id)
+    net.cuda()
     net.eval()
 
     ## dataset

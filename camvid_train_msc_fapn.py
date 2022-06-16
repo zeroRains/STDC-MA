@@ -227,7 +227,7 @@ def train():
     #               use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
     # originParams = torch.load("/home/disk2/ray/workspace/zerorains/stdc/checkpoints/MSC_RMI_FAPN_optim_camvid_STDC2-Seg/pths/bestResult.pth", map_location="cpu")
     net = torch.load(
-        "/home/disk2/ray/workspace/zerorains/stdc/checkpoints/MSC_RMI_FAPN_optim_camvid_STDC2-Seg/pths/bestResult.pth")
+        "/home/disk2/ray/workspace/zerorains/stdc/checkpoints/MSC_RMI_FAPN_optim_camvid_STDC2-Seg/pths/model_maxmIOU.pth")
     # modelDict = net.state_dict()
     # pullDict = {name: value for name, value in originParams.items() if name in modelDict.keys()}
     # modelDict.update(pullDict)

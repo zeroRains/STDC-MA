@@ -27,6 +27,7 @@ import datetime
 import argparse
 
 import setproctitle
+
 setproctitle.setproctitle("train_stdc_pascalvoc_zerorains")
 logger = logging.getLogger()
 CUDA_ID = 1
@@ -163,7 +164,7 @@ def train():
     # 设置模型保存路径
     save_pth_path = os.path.join(args.respath, 'pths')
     dspth = './data'
-    cropsize = [320, 480]
+    cropsize = [480, 640]
     print(save_pth_path)
     print(osp.exists(save_pth_path))
     # if not osp.exists(save_pth_path) and dist.get_rank()==0:
@@ -221,9 +222,11 @@ def train():
 
     ## model
     ignore_idx = 255
-    net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
-                  use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
-                  use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
+    # net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
+    #               use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
+    #               use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
+    # net.load_state_dict(
+    net = torch.load("/home/disk2/ray/workspace/zerorains/stdc/checkpoints/pascal_voc_STDC2-Seg/pths/model_maxmIOU.pth")
     # net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optim_CamVid.pth"))
     net.cuda()
     net.train()

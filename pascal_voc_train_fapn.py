@@ -26,6 +26,7 @@ import datetime
 import argparse
 
 import setproctitle
+
 setproctitle.setproctitle("train_stdc_pascalvoc_fapn_zerorains")
 
 logger = logging.getLogger()
@@ -163,7 +164,7 @@ def train():
     # 设置模型保存路径
     save_pth_path = os.path.join(args.respath, 'pths')
     dspth = './data'
-    cropsize = [320, 480]
+    cropsize = [480, 640]
     print(save_pth_path)
     print(osp.exists(save_pth_path))
     # if not osp.exists(save_pth_path) and dist.get_rank()==0:
@@ -401,7 +402,7 @@ def train():
             # ## evaluator
             logger.info('compute the mIOU')
             with torch.no_grad():
-                single_scale2 = MscEvalV0(scale=1, ignore_label=11)
+                single_scale2 = MscEvalV0(scale=1, ignore_label=255)
                 mIOU75 = single_scale2(net, dlval, n_classes)
 
             save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU_{}.pth'

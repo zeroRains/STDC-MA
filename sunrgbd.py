@@ -15,29 +15,29 @@ import json
 from transform import *
 
 
-class PascalVoc(Dataset):
-    # PascalVoc数据集总共有21类，可以用下面的数组进行表示，坐标表示像素值，数据对应标签
-    # lables = ["unlabelled","airplane","bicycle","bird","boat","bottle","bus","car","cat","chair","cow","DiningTable","dog","horse","MotorBike","person","PottedPlant","sheep","sofa","train","monitor"]
-    # 其中：255位ignore_label，0表示背景即unlabelled
+class SunRGBD(Dataset):
+    # SunRGBD数据集总共有37+1类（1是背景），可以用下面的数组进行表示，坐标表示像素值，数据对应标签
     # 参数为图像的根地址，和随机裁剪的尺寸
-    def __init__(self, rootpth, cropsize=(480, 640), mode='train', *args,
+    def __init__(self, rootpth, cropsize=(591, 441), mode='train', *args,
                  **kwargs):
-        super(PascalVoc, self).__init__(*args, **kwargs)
+        super(SunRGBD, self).__init__(*args, **kwargs)
         # 确认数据集加载的类型
-        assert mode in ('train', 'val')
+        assert mode in ('train', 'test')
         self.mode = mode
         self.img = []
         self.label = []
         print('self.mode', self.mode)
         ## parse img directory
         # 获取图片，将图片的路径存放在{名字：路径}的字典中
-        img_list_file = rootpth + "/PascalVocSeg/" + self.mode + "_seg.txt"
-        with open(img_list_file, 'r+') as f:
-            file_data = f.readlines()
-        for img_label in file_data:
-            img_path, label_path = img_label.split()
-            self.img.append(img_path)
-            self.label.append(label_path)
+        img_list_file = rootpth + "/SUN_RGBD/" + self.mode + ".txt"
+        with open(img_list_file, "r") as f:
+            img_file_name = f.readlines()
+            for data in img_file_name:
+                data = data.strip().split()
+                img_path = data[0]
+                label_path = data[1]
+                self.img.append(img_path)
+                self.label.append(label_path)
 
         self.len = len(self.img)
         print('self.len', self.mode, self.len)
@@ -64,7 +64,7 @@ class PascalVoc(Dataset):
         img = Image.open(impth).convert('RGB')
         label = Image.open(lbpth)
         # 训练集进行数据增强
-        if self.mode == 'train' or self.mode == 'trainval':
+        if self.mode == 'train':
             im_lb = dict(im=img, lb=label)
             im_lb = self.trans_train(im_lb)
             img, label = im_lb['im'], im_lb['lb']
@@ -80,16 +80,13 @@ class PascalVoc(Dataset):
 
 if __name__ == "__main__":
     from tqdm import tqdm
-
     # 参数如下：
     # dspth：数据集的路径（不带），字符串
-    # cropsize：输入图像要经过缩放后输出的最终结果(默认：(320, 480))，列表/元组，如[1024, 512]
-    # mode：训练集类型，字符串，val表示验证集，train表示训练集，
-    ds = PascalVoc('/home/disk2/ray/datasets/', mode='train')
+    # cropsize：输入图像要经过缩放后输出的最终结果(默认：(591,441))，列表/元组，如[1024, 512]
+    # mode：训练集类型，字符串，test表示測試集，train表示训练集，
+    ds = SunRGBD('/home/disk2/ray/datasets/', mode='train')
     uni = []
     for im, lb in tqdm(ds):
-        if im.shape[1:] != lb.shape[1:]:
-            break
         lb_uni = np.unique(lb).tolist()
         uni.extend(lb_uni)
     print(uni)

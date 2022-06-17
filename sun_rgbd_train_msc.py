@@ -82,7 +82,7 @@ def parse_args():
         '--save_iter_sep',
         dest='save_iter_sep',
         type=int,
-        default=1000,
+        default=4000,
     )
     parse.add_argument(
         '--warmup_steps',
@@ -206,7 +206,7 @@ def train():
     # sampler = torch.utils.data.distributed.DistributedSampler(ds)
     dl = DataLoader(ds,
                     batch_size=n_img_per_gpu,
-                    shuffle=False,
+                    shuffle=True,
                     num_workers=n_workers_train,
 
                     pin_memory=False,
@@ -225,7 +225,8 @@ def train():
     net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
                   use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
                   use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
-
+    net.load_state_dict(
+        torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optim_sun_rgbd_msc.pth", map_location='cpu'))
     net.cuda(CUDA_ID)
     net.train()
     # net = nn.parallel.DistributedDataParallel(net,
@@ -424,7 +425,7 @@ def train():
             logger.info('maxmIOU is: {}.'.format(maxmIOU75))
             torch.cuda.empty_cache()
             net.train()
-
+            torch.cuda.empty_cache()
     ## dump the final model
     save_pth = osp.join(save_pth_path, 'model_final.pth')
     net.cpu()

@@ -1,10 +1,10 @@
 import torch
 
-from models.model_stages import BiSeNet
+from models.model_stages_msc_fapn import BiSeNet
 
 # model = torch.nn.Linear(3, 100)
 # 新模型
-model = BiSeNet(backbone="STDCNet1446", n_classes=11, pretrain_model=None, use_boundary_2=False, use_boundary_4=False,
+model = BiSeNet(backbone="STDCNet1446", n_classes=38, pretrain_model=None, use_boundary_2=False, use_boundary_4=False,
                 use_boundary_8=True, use_boundary_16=False, use_conv_last=False)
 
 print("加载成功")
@@ -27,5 +27,5 @@ modelDict.update(pullDict)
 model.load_state_dict(modelDict)
 model(a)
 # 保存模型
-torch.save(model.state_dict(), "STDC2optim_CamVid.pth")
+torch.save(model.state_dict(), "STDC2optim_sun_rgbd_msc_fapn.pth")
 print("save finished!")

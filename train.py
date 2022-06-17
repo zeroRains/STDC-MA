@@ -8,6 +8,7 @@ from models.model_stages import BiSeNet
 from cityscapes import CityScapes
 from loss.loss import OhemCELoss
 from loss.detail_loss import DetailAggregateLoss
+from torch.utils.tensorboard import SummaryWriter
 from evaluation import MscEvalV0
 from optimizer_loss import Optimizer
 
@@ -23,10 +24,14 @@ import logging
 import time
 import datetime
 import argparse
+import setproctitle
+
+setproctitle.setproctitle("train_stdc_cityscapes_zerorains")
 
 logger = logging.getLogger()
 CUDA_ID = 3
 torch.cuda.set_device(CUDA_ID)
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 def str2bool(v):
@@ -64,14 +69,14 @@ def parse_args():
         '--n_img_per_gpu',
         dest='n_img_per_gpu',
         type=int,
-        default=8,
+        default=16,
     )
     # 最大迭代次数
     parse.add_argument(
         '--max_iter',
         dest='max_iter',
         type=int,
-        default=150000,
+        default=100000,
     )
     # 保存频率
     parse.add_argument(
@@ -104,7 +109,7 @@ def parse_args():
         '--respath',
         dest='respath',
         type=str,
-        default="checkpoints/GCT_optim_STDC2-Seg/",
+        default="checkpoints/cityscapes_optim_STDC2-Seg/",
     )
     # 主干网络
     parse.add_argument(
@@ -191,20 +196,12 @@ def train():
     # 随机缩放
     randomscale = (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.375, 1.5)
 
-    # if dist.get_rank()==0:
-    #     logger.info('n_workers_train: {}'.format(n_workers_train))
-    #     logger.info('n_workers_val: {}'.format(n_workers_val))
-    #     logger.info('use_boundary_2: {}'.format(use_boundary_2))
-    #     logger.info('use_boundary_4: {}'.format(use_boundary_4))
-    #     logger.info('use_boundary_8: {}'.format(use_boundary_8))
-    #     logger.info('use_boundary_16: {}'.format(use_boundary_16))
-    #     logger.info('mode: {}'.format(args.mode))
     # 加载数据集
     ds = CityScapes(dspth, cropsize=cropsize, mode=mode, randomscale=randomscale)
     # sampler = torch.utils.data.distributed.DistributedSampler(ds)
     dl = DataLoader(ds,
                     batch_size=n_img_per_gpu,
-                    shuffle=False,
+                    shuffle=True,
                     num_workers=n_workers_train,
                     pin_memory=False,
                     drop_last=True)
@@ -219,20 +216,13 @@ def train():
 
     ## model
     ignore_idx = 255
-    # net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
-    #               use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
-    #               use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
-    # net = torch.load("./checkpoints/train_STDC2-Seg/pths/model_maxmIOU75.pth")
-    net = torch.load("STDC2optimGCT.pth")
-    # print(net)
-    # exit(0)
-    net.cuda(CUDA_ID)
+    net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
+                  use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
+                  use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
+    net.load_state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/checkpoints/STDC2-Seg/model_maxmIOU75.pth",
+                                   map_location='cpu'))
+    net.cuda()
     net.train()
-    # net = nn.parallel.DistributedDataParallel(net,
-    #                                           device_ids=[args.local_rank, ],
-    #                                           output_device=args.local_rank,
-    #                                           find_unused_parameters=True
-    #                                           )
 
     score_thres = 0.7
     # 这个算的什么我也看不明白，batch*h*w//16
@@ -279,6 +269,9 @@ def train():
     st = glob_st = time.time()
     diter = iter(dl)
     epoch = 0
+    tensor_board_path = os.path.join("./logs", "cityscapes_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
+    os.mkdir(tensor_board_path)
+    visual = SummaryWriter(tensor_board_path)
     for it in range(max_iter):
         try:
             # 遍历数据集
@@ -290,8 +283,8 @@ def train():
             diter = iter(dl)
             im, lb = next(diter)
         #     加入到cuda中
-        im = im.cuda(CUDA_ID)
-        lb = lb.cuda(CUDA_ID)
+        im = im.cuda()
+        lb = lb.cuda()
         H, W = im.size()[2:]
         lb = torch.squeeze(lb, 1)
 
@@ -351,6 +344,7 @@ def train():
         ## print training log message
         if (it + 1) % msg_iter == 0:
             loss_avg = sum(loss_avg) / len(loss_avg)
+            visual.add_scalar("total-loss", loss_avg, it)
             # lr = optim.lr
             lr = optim.defaults["lr"]
             ed = time.time()
@@ -420,7 +414,8 @@ def train():
                 # state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
                 # # if dist.get_rank()==0:
                 # torch.save(state, save_pth)
-                torch.save(net, save_pth)
+                torch.save(net.state_dict(), save_pth)
+
                 logger.info('max mIOU model saved to: {}'.format(save_pth))
 
             if mIOU75 > maxmIOU75:
@@ -429,8 +424,10 @@ def train():
                 # state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
                 # if dist.get_rank()==0:
                 # torch.save(state, save_pth)
-                torch.save(net, save_pth)
+                torch.save(net.state_dict(), save_pth)
                 logger.info('max mIOU model saved to: {}'.format(save_pth))
+            visual.add_scalar("MIOU75", mIOU75, (it + 1) // save_iter_sep)
+            visual.add_scalar("MIOU50", mIOU50, (it + 1) // save_iter_sep)
             logger.info('maxmIOU50 is: {}, maxmIOU75 is: {}.'.format(maxmIOU50, maxmIOU75))
 
             net.train()
@@ -441,7 +438,7 @@ def train():
     # state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
     # if dist.get_rank()==0:
     # torch.save(state, save_pth)
-    torch.save(net, save_pth)
+    torch.save(net.state_dict(), save_pth)
     logger.info('training done, model saved to: {}'.format(save_pth))
     print('epoch: ', epoch)
 

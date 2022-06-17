@@ -28,8 +28,9 @@ import setproctitle
 setproctitle.setproctitle("train_fapn_stdc_zerorains")
 
 logger = logging.getLogger()
-CUDA_ID = 3
+CUDA_ID = 1
 torch.cuda.set_device(CUDA_ID)
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 def str2bool(v):
@@ -67,14 +68,14 @@ def parse_args():
         '--n_img_per_gpu',
         dest='n_img_per_gpu',
         type=int,
-        default=8,
+        default=16,
     )
     # 最大迭代次数
     parse.add_argument(
         '--max_iter',
         dest='max_iter',
         type=int,
-        default=150000,
+        default=100000,
     )
     # 保存频率
     parse.add_argument(
@@ -107,7 +108,7 @@ def parse_args():
         '--respath',
         dest='respath',
         type=str,
-        default="checkpoints/FaPN_optim_STDC2-Seg/",
+        default="checkpoints/cityscapes_FaPN_optim_STDC2-Seg/",
     )
     # 主干网络
     parse.add_argument(
@@ -207,7 +208,7 @@ def train():
     # sampler = torch.utils.data.distributed.DistributedSampler(ds)
     dl = DataLoader(ds,
                     batch_size=n_img_per_gpu,
-                    shuffle=False,
+                    shuffle=True,
                     num_workers=n_workers_train,
 
                     pin_memory=False,
@@ -223,15 +224,13 @@ def train():
 
     ## model
     ignore_idx = 255
-    # net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
-    #               use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
-    #               use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
-    # net = torch.load("./checkpoints/train_STDC2-Seg/pths/model_maxmIOU75.pth")
-    # net = torch.load("./checkpoints/La_optim_STDC2-Seg/pths/model_maxmIOU50.pth")
-    net = torch.load("./STDC2optimFaPN.pth")
-    # print(net)
-    # exit(0)
-    net.cuda(CUDA_ID)
+    net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
+                  use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
+                  use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
+    net.load_state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optimFaPN.pth",
+                                   map_location='cpu').state_dict())
+
+    net.cuda()
     net.train()
     # net = nn.parallel.DistributedDataParallel(net,
     #                                           device_ids=[args.local_rank, ],
@@ -288,7 +287,7 @@ def train():
     tensor_board_log = os.path.join(args.respath, "logs")
     # if os.path.exists(tensor_board_log):
     #     os.mkdir(tensor_board_log)
-    tensor_board_path = os.path.join(tensor_board_log, '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
+    tensor_board_path = os.path.join("./logs", "cityscapes_fapn_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
     os.mkdir(tensor_board_path)
     visual = SummaryWriter(tensor_board_path)
     for it in range(max_iter):
@@ -302,8 +301,8 @@ def train():
             diter = iter(dl)
             im, lb = next(diter)
         #     加入到cuda中
-        im = im.cuda(CUDA_ID)
-        lb = lb.cuda(CUDA_ID)
+        im = im.cuda()
+        lb = lb.cuda()
         H, W = im.size()[2:]
         lb = torch.squeeze(lb, 1)
 
@@ -359,7 +358,7 @@ def train():
 
         loss_boundery_bce.append(boundery_bce_loss.item())
         loss_boundery_dice.append(boundery_dice_loss.item())
-
+        torch.cuda.empty_cache()
         ## print training log message
         if (it + 1) % msg_iter == 0:
             loss_avg = sum(loss_avg) / len(loss_avg)
@@ -412,13 +411,12 @@ def train():
             with torch.no_grad():
                 single_scale1 = MscEvalV0()
                 mIOU50 = single_scale1(net, dlval, n_classes)
-
                 single_scale2 = MscEvalV0(scale=0.75)
                 mIOU75 = single_scale2(net, dlval, n_classes)
 
             save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU50_{}_mIOU75_{}.pth'
                                 .format(it + 1, str(round(mIOU50, 4)), str(round(mIOU75, 4))))
-            torch.save(net, save_pth)
+            torch.save(net.state_dict(), save_pth)
             # state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
             # if dist.get_rank()==0:
             # torch.save(state, save_pth)
@@ -433,7 +431,7 @@ def train():
                 # state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
                 # # if dist.get_rank()==0:
                 # torch.save(state, save_pth)
-                torch.save(net, save_pth)
+                torch.save(net.state_dict(), save_pth)
                 logger.info('max mIOU model saved to: {}'.format(save_pth))
 
             if mIOU75 > maxmIOU75:
@@ -442,7 +440,7 @@ def train():
                 # state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
                 # if dist.get_rank()==0:
                 # torch.save(state, save_pth)
-                torch.save(net, save_pth)
+                torch.save(net.state_dict(), save_pth)
                 logger.info('max mIOU model saved to: {}'.format(save_pth))
             logger.info('maxmIOU50 is: {}, maxmIOU75 is: {}.'.format(maxmIOU50, maxmIOU75))
             visual.add_scalar("MIOU75", mIOU75, (it + 1) // save_iter_sep)
@@ -457,7 +455,7 @@ def train():
     # if dist.get_rank()==0:
     # torch.save(state, save_pth)
     visual.close()
-    torch.save(net, save_pth)
+    torch.save(net.state_dict(), save_pth)
     logger.info('training done, model saved to: {}'.format(save_pth))
     print('epoch: ', epoch)
 

@@ -29,9 +29,9 @@ import setproctitle
 setproctitle.setproctitle("train_msc_stdc_camvid_zerorains")
 
 logger = logging.getLogger()
-CUDA_ID = 3
+CUDA_ID = 0
 torch.cuda.set_device(CUDA_ID)
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 def str2bool(v):
@@ -182,7 +182,7 @@ def train():
     # 设置日志文件
     setup_logger(args.respath)
     ## dataset
-    n_classes = 11
+    n_classes = 12
     n_img_per_gpu = args.n_img_per_gpu
     n_workers_train = args.n_workers_train
     n_workers_val = args.n_workers_val
@@ -215,7 +215,7 @@ def train():
     dsval = CamVid(dspth, mode='val', randomscale=randomscale)
     # sampler_val = torch.utils.data.distributed.DistributedSampler(dsval)
     dlval = DataLoader(dsval,
-                       batch_size=2,
+                       batch_size=1,
                        shuffle=False,
                        num_workers=n_workers_val,
                        drop_last=False)
@@ -232,7 +232,7 @@ def train():
     score_thres = 0.7
     # 最少需要考虑总数样本的1/16
     n_min = n_img_per_gpu * cropsize[0] * cropsize[1] // 16
-    criteria_p = RMILoss(num_classes=n_classes)
+    criteria_p = RMILoss(num_classes=n_classes, ignore_lb=ignore_idx)
 
     # criteria_p = OhemCELoss(thresh=score_thres, n_min=n_min, ignore_lb=ignore_idx)
 

@@ -29,9 +29,9 @@ import setproctitle
 setproctitle.setproctitle("train_msc_stdc_camvid_zerorains")
 
 logger = logging.getLogger()
-CUDA_ID = 3
+CUDA_ID = 2
 torch.cuda.set_device(CUDA_ID)
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 def str2bool(v):
@@ -182,7 +182,7 @@ def train():
     # 设置日志文件
     setup_logger(args.respath)
     ## dataset
-    n_classes = 11
+    n_classes = 12
     n_img_per_gpu = args.n_img_per_gpu
     n_workers_train = args.n_workers_train
     n_workers_val = args.n_workers_val
@@ -215,7 +215,7 @@ def train():
     dsval = CamVid(dspth, mode='val', randomscale=randomscale)
     # sampler_val = torch.utils.data.distributed.DistributedSampler(dsval)
     dlval = DataLoader(dsval,
-                       batch_size=2,
+                       batch_size=1,
                        shuffle=False,
                        num_workers=n_workers_val,
                        drop_last=False)
@@ -227,13 +227,13 @@ def train():
                   use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
     net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optim_camvid_msc.pth"))
 
-    net.cuda()
+    net.cuda(CUDA_ID)
     net.train()
 
     score_thres = 0.7
     # 最少需要考虑总数样本的1/16
     n_min = n_img_per_gpu * cropsize[0] * cropsize[1] // 16
-    criteria_p = RMILoss(num_classes=n_classes)
+    criteria_p = RMILoss(num_classes=n_classes, ignore_lb=ignore_idx)
 
     # criteria_p = OhemCELoss(thresh=score_thres, n_min=n_min, ignore_lb=ignore_idx)
 
@@ -296,8 +296,8 @@ def train():
             diter = iter(dl)
             im, lb = next(diter)
         #     加入到cuda中
-        im = im.cuda()
-        lb = lb.cuda()
+        im = im.cuda(CUDA_ID)
+        lb = lb.cuda(CUDA_ID)
         H, W = im.size()[2:]
         lb = torch.squeeze(lb, 1)
 

@@ -113,6 +113,7 @@ class RMILoss(nn.Module):
                  rmi_pool_size=3,
                  rmi_pool_stride=3,
                  loss_weight_lambda=0.5,
+                 ignore_lb=0,
                  lambda_way=1):
         super(RMILoss, self).__init__()
         self.num_classes = num_classes
@@ -134,7 +135,7 @@ class RMILoss(nn.Module):
         self.d = 2 * self.half_d
         self.kernel_padding = self.rmi_pool_size // 2
         # ignore class
-        self.ignore_index = 255
+        self.ignore_index = ignore_lb
 
     def forward(self, logits_4D, labels_4D):
         loss = self.forward_sigmoid(logits_4D, labels_4D)

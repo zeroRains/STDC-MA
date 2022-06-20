@@ -109,7 +109,7 @@ def parse_args():
         '--respath',
         dest='respath',
         type=str,
-        default="checkpoints/MSC_optim_camvid_STDC2-Seg/",
+        default="checkpoints/camvid_MSC_optim_STDC2-Seg/",
     )
     # 主干网络
     parse.add_argument(
@@ -221,13 +221,12 @@ def train():
                        drop_last=False)
 
     ## model
-    ignore_idx = 11
-    # net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
-    #               use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
-    #               use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
-    # net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/checkpoints/MSC_optim_camvid_STDC2-Seg/pths/model_maxmIOU.pth"))
-    net = torch.load(
-        "/home/disk2/ray/workspace/zerorains/stdc/checkpoints/MSC_optim_camvid_STDC2-Seg/pths/model_maxmIOU.pth")
+    ignore_idx = 0
+    net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
+                  use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
+                  use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
+    net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optim_camvid_msc.pth"))
+
     net.cuda()
     net.train()
 
@@ -283,7 +282,7 @@ def train():
     diter = iter(dl)
     epoch = 0
 
-    tensor_board_path = os.path.join("./logs", "msc_camvid_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
+    tensor_board_path = os.path.join("./logs", "camvid_msc_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
     os.mkdir(tensor_board_path)
     visual = SummaryWriter(tensor_board_path)
     for it in range(max_iter):
@@ -407,7 +406,7 @@ def train():
             with torch.no_grad():
                 scales = [0.5, 1.0, 1.5, 2.0]
 
-                single_scale2 = MscEvalV0(scale=1, ignore_label=11)
+                single_scale2 = MscEvalV0(scale=1, ignore_label=ignore_idx)
                 mIOU75 = single_scale2(net, dlval, n_classes, scales=scales)
 
             save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU_{}.pth'

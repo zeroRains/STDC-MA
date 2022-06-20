@@ -109,7 +109,7 @@ def parse_args():
         '--respath',
         dest='respath',
         type=str,
-        default="checkpoints/MSC_RMI_FAPN_optim_camvid_STDC2-Seg/",
+        default="checkpoints/camvid_MSC_RMI_FAPN_optim_STDC2-Seg/",
     )
     # 主干网络
     parse.add_argument(
@@ -221,19 +221,11 @@ def train():
                        drop_last=False)
 
     ## model
-    ignore_idx = 11
-    # net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
-    #               use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
-    #               use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
-    # originParams = torch.load("/home/disk2/ray/workspace/zerorains/stdc/checkpoints/MSC_RMI_FAPN_optim_camvid_STDC2-Seg/pths/bestResult.pth", map_location="cpu")
-    net = torch.load(
-        "/home/disk2/ray/workspace/zerorains/stdc/checkpoints/MSC_RMI_FAPN_optim_camvid_STDC2-Seg/pths/model_maxmIOU.pth")
-    # modelDict = net.state_dict()
-    # pullDict = {name: value for name, value in originParams.items() if name in modelDict.keys()}
-    # modelDict.update(pullDict)
-    # net.load_state_dict(modelDict)
-    # net.state_dict(torch.load(
-    #     ""))
+    ignore_idx = 0
+    net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
+                  use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
+                  use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
+    net.load_state_dict(torch.load('/home/disk2/ray/workspace/zerorains/stdc/STDC2optim_camvid_msc_fapn.pth'))
     net.cuda()
     net.train()
 
@@ -289,7 +281,7 @@ def train():
     diter = iter(dl)
     epoch = 0
 
-    tensor_board_path = os.path.join("./logs", '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')) + "_msc_fapn_rmi_camvid")
+    tensor_board_path = os.path.join("./logs", "camvid_msc_fapn_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
     os.mkdir(tensor_board_path)
     visual = SummaryWriter(tensor_board_path)
     for it in range(max_iter):
@@ -413,7 +405,7 @@ def train():
             with torch.no_grad():
                 scales = [0.5, 1.0, 1.5, 2.0]
 
-                single_scale2 = MscEvalV0(scale=1, ignore_label=11)
+                single_scale2 = MscEvalV0(scale=1, ignore_label=ignore_idx)
                 mIOU75 = single_scale2(net, dlval, n_classes, scales=scales)
 
             save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU_{}.pth'

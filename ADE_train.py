@@ -4,9 +4,9 @@ from tqdm import tqdm
 
 from logger import setup_logger
 
-from models.model_stages_FaPN import BiSeNet
+from models.model_stages import BiSeNet
 
-from camvid import CamVid
+from ade2016challenge import ADE2016Challenge
 from loss.loss import OhemCELoss, RMILoss
 from loss.detail_loss import DetailAggregateLoss
 from evaluation import MscEvalV0
@@ -24,14 +24,14 @@ import logging
 import time
 import datetime
 import argparse
-import setproctitle
 
-setproctitle.setproctitle("train_fapn_stdc_camvid_zerorains")
+import setproctitle
+setproctitle.setproctitle("train_stdc_ade_zerorains")
 
 logger = logging.getLogger()
-CUDA_ID = 1
+CUDA_ID = 3
 torch.cuda.set_device(CUDA_ID)
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 def str2bool(v):
@@ -76,7 +76,7 @@ def parse_args():
         '--max_iter',
         dest='max_iter',
         type=int,
-        default=80000,
+        default=100000,
     )
     # 保存频率
     parse.add_argument(
@@ -109,7 +109,7 @@ def parse_args():
         '--respath',
         dest='respath',
         type=str,
-        default="checkpoints/camvid_FaPN_optim_STDC2-Seg/",
+        default="checkpoints/ADE_STDC2-Seg/",
     )
     # 主干网络
     parse.add_argument(
@@ -163,8 +163,7 @@ def train():
     # 设置模型保存路径
     save_pth_path = os.path.join(args.respath, 'pths')
     dspth = './data'
-    cropsize = [960, 720]
-    randomscale = (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.375, 1.5)
+    cropsize = [512, 512]
     print(save_pth_path)
     print(osp.exists(save_pth_path))
     # if not osp.exists(save_pth_path) and dist.get_rank()==0:
@@ -182,7 +181,7 @@ def train():
     # 设置日志文件
     setup_logger(args.respath)
     ## dataset
-    n_classes = 11
+    n_classes = 150
     n_img_per_gpu = args.n_img_per_gpu
     n_workers_train = args.n_workers_train
     n_workers_val = args.n_workers_val
@@ -203,7 +202,7 @@ def train():
     #     logger.info('mode: {}'.format(args.mode))
     # 加载数据集
 
-    ds = CamVid(dspth, cropsize=cropsize, mode=mode, randomscale=randomscale)
+    ds = ADE2016Challenge(dspth, cropsize=cropsize, mode=mode)
     # sampler = torch.utils.data.distributed.DistributedSampler(ds)
     dl = DataLoader(ds,
                     batch_size=n_img_per_gpu,
@@ -212,10 +211,10 @@ def train():
                     pin_memory=False,
                     drop_last=True)
     # exit(0)
-    dsval = CamVid(dspth, mode='val', randomscale=randomscale)
+    dsval = ADE2016Challenge(dspth, mode='val')
     # sampler_val = torch.utils.data.distributed.DistributedSampler(dsval)
     dlval = DataLoader(dsval,
-                       batch_size=2,
+                       batch_size=1,
                        shuffle=False,
                        num_workers=n_workers_val,
                        drop_last=False)
@@ -225,8 +224,8 @@ def train():
     net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
                   use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
                   use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
-    net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optim_camvid_fapn.pth"))
-    net.cuda(CUDA_ID)
+    # net.state_dict(torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optim_ADE2016Challenge.pth"))
+    net.cuda()
     net.train()
 
     score_thres = 0.7
@@ -281,7 +280,7 @@ def train():
     diter = iter(dl)
     epoch = 0
 
-    tensor_board_path = os.path.join("./logs", "camvid_fapn_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
+    tensor_board_path = os.path.join("./logs", "ade_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
     os.mkdir(tensor_board_path)
     visual = SummaryWriter(tensor_board_path)
     for it in range(max_iter):
@@ -295,8 +294,8 @@ def train():
             diter = iter(dl)
             im, lb = next(diter)
         #     加入到cuda中
-        im = im.cuda(CUDA_ID)
-        lb = lb.cuda(CUDA_ID)
+        im = im.cuda()
+        lb = lb.cuda()
         H, W = im.size()[2:]
         lb = torch.squeeze(lb, 1)
 
@@ -402,12 +401,12 @@ def train():
             # ## evaluator
             logger.info('compute the mIOU')
             with torch.no_grad():
-                single_scale2 = MscEvalV0(scale=1, ignore_label=ignore_idx)
+                single_scale2 = MscEvalV0(scale=1, ignore_label=0)
                 mIOU75 = single_scale2(net, dlval, n_classes)
 
             save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU_{}.pth'
                                 .format(it + 1, str(round(mIOU75, 4))))
-            torch.save(net, save_pth)
+            torch.save(net.state_dict(), save_pth)
             # state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
             # if dist.get_rank()==0:
             # torch.save(state, save_pth)
@@ -423,7 +422,7 @@ def train():
                 # state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
                 # if dist.get_rank()==0:
                 # torch.save(state, save_pth)
-                torch.save(net, save_pth)
+                torch.save(net.state_dict(), save_pth)
                 logger.info('max mIOU model saved to: {}'.format(save_pth))
             visual.add_scalar("MIOU", mIOU75, (it + 1) // save_iter_sep)
             logger.info(' maxmIOU is: {}.'.format(maxmIOU75))
@@ -437,7 +436,7 @@ def train():
     # if dist.get_rank()==0:
     # torch.save(state, save_pth)
     visual.close()
-    torch.save(net, save_pth)
+    torch.save(net.state_dict(), save_pth)
     logger.info('training done, model saved to: {}'.format(save_pth))
     print('epoch: ', epoch)
 

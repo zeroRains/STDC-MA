@@ -2,8 +2,9 @@
 # -*- encoding: utf-8 -*-
 
 from logger import setup_logger
-from models.model_stages import BiSeNet
+from models.model_stages_msc import BiSeNet
 from cityscapes import CityScapes
+from camvid import CamVid
 
 import torch
 import torch.nn as nn
@@ -20,6 +21,7 @@ from tqdm import tqdm
 import math
 from thop import profile
 
+
 # cuda_id = 3
 # # os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 # torch.cuda.set_device(cuda_id)
@@ -27,10 +29,11 @@ from thop import profile
 
 class MscEvalV0(object):
 
-    def __init__(self, scale=0.5, ignore_label=255):
+    def __init__(self, scale=0.5, ignore_label=255, mode=0):
         self.ignore_label = ignore_label
         self.scale = scale
         self.epsilon = 1e-9
+        self.mode = mode
 
     def __call__(self, net, dl, n_classes, trick=None, patch=None, mask=None, scales=None):
         ## evaluate
@@ -41,7 +44,9 @@ class MscEvalV0(object):
             diter = enumerate(tqdm(dl))
         for i, (imgs, label) in diter:
             N, _, H, W = label.shape
-
+            if self.mode == '233':
+                label = label - 1
+                label = torch.where(label == -1, torch.tensor(255), label)
             label = label.squeeze(1).cuda()
             size = label.size()[-2:]
 
@@ -49,8 +54,8 @@ class MscEvalV0(object):
             if not isinstance(trick, type(None)) \
                     and not isinstance(patch, type(None)) \
                     and not isinstance(mask, type(None)):
-                imgs = imgs.cuda(3)
-                label = label.cuda(3)
+                imgs = imgs.cuda()
+                label = label.cuda()
                 imgs = trick(imgs, patch, mask)
 
             N, C, H, W = imgs.size()
@@ -73,7 +78,7 @@ class MscEvalV0(object):
             # print(preds.device)
             # preds就是最后的分割结果
             # 后面就是MIOU的计算了
-            keep = label != self.ignore_label
+            keep = label != 255
 
             hist += torch.bincount(
                 label[keep] * n_classes + preds[keep],
@@ -83,23 +88,39 @@ class MscEvalV0(object):
             # print(hist.diag() / (hist.sum(dim=0) + hist.sum(dim=1) - hist.diag()))
         if dist.is_initialized():
             dist.all_reduce(hist, dist.ReduceOp.SUM)
-        ious = (hist.diag()+self.epsilon) / (hist.sum(dim=0) + hist.sum(dim=1) - hist.diag()+self.epsilon)
+        ious = (hist.diag() + self.epsilon) / (hist.sum(dim=0) + hist.sum(dim=1) - hist.diag() + self.epsilon)
         miou = ious.mean()
         return miou.item()
 
 
-def evaluatev0(respth='./pretrained', dspth='./data', backbone='CatNetSmall', scale=0.75, use_boundary_2=False,
-               use_boundary_4=False, use_boundary_8=False, use_boundary_16=False, use_conv_last=False):
+def evaluatev0(respth='./pretrained',
+               datasets='cityiscapes',
+               ignore_label=255,
+               n_classes=19,
+               dspth='./data',
+               backbone='STDCNet1446',
+               scale=0.75,
+               use_boundary_2=False,
+               use_boundary_4=False,
+               use_boundary_8=True,
+               use_boundary_16=False,
+               use_conv_last=False):
     print('scale', scale)
     print('use_boundary_2', use_boundary_2)
     print('use_boundary_4', use_boundary_4)
     print('use_boundary_8', use_boundary_8)
     print('use_boundary_16', use_boundary_16)
     ## dataset
-    batchsize = 5
+    batchsize = 1
     n_workers = 2
     # 数据集加载
-    dsval = CityScapes(dspth, mode='val')
+    if datasets == 'cityscapes':
+        dsval = CityScapes(dspth, mode='val')
+    elif datasets == 'camvid':
+        dsval = CamVid(dspth, mode='test')
+    else:
+        print("datasets error！")
+        exit(0)
     # 数据装载
     dl = DataLoader(dsval,
                     batch_size=batchsize,
@@ -107,20 +128,19 @@ def evaluatev0(respth='./pretrained', dspth='./data', backbone='CatNetSmall', sc
                     num_workers=n_workers,
                     drop_last=False)
 
-    n_classes = 19
+    n_classes = n_classes
     print("backbone:", backbone)
     # 模型载入，参数加载
-    net = BiSeNet(backbone=backbone, n_classes=n_classes,
-                  use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4,
-                  use_boundary_8=use_boundary_8, use_boundary_16=use_boundary_16,
-                  use_conv_last=use_conv_last)
+    net = BiSeNet(backbone="STDCNet1446", n_classes=n_classes, pretrain_model=None, use_boundary_2=False,
+                  use_boundary_4=False,
+                  use_boundary_8=True, use_boundary_16=False, use_conv_last=False)
     net.load_state_dict(torch.load(respth))
     # net = torch.load(respth, map_location="cpu")
     net.eval()
     # torch.save(net, "STDC2origin.pth")
     # exit(0)
-    a = torch.rand((1, 3, 512, 1024))
-    flops, params = profile(net, inputs=(a,))
+    # a = torch.rand((1, 3, 512, 1024))
+    # flops, params = profile(net, inputs=(a,))
     # print(flops)
     # print(params)
     # print('FLOPs = ' + str(flops / 1000 ** 3) + 'G')
@@ -131,13 +151,13 @@ def evaluatev0(respth='./pretrained', dspth='./data', backbone='CatNetSmall', sc
     # 开始验证
     with torch.no_grad():
         # 获取验证实例对象
-        single_scale = MscEvalV0(scale=scale)
+        single_scale = MscEvalV0(scale=scale, ignore_label=ignore_label)
         # s = [0.5, 1.0, 1.5, 2.0]
         # print(s)
         # 输入的参数为，装载好的网络，和装载好的数据集，以及类别数
-        mIOU = single_scale(net, dl, 19)
-    logger = logging.getLogger()
-    logger.info('mIOU is: %s\n', mIOU)
+        mIOU = single_scale(net, dl, n_classes)
+    # logger = logging.getLogger()
+    print('mIOU is: %s\n', mIOU)
 
 
 class MscEval(object):

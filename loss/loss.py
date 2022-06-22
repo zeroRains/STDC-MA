@@ -23,8 +23,8 @@ class SemanticEdgeLoss(nn.Module):
         mask_edge = semantic_edge(mask, class_num)
         pred_edge = semantic_edge(pred.argmax(dim=1), class_num)
         for i in range(class_num):
-            loss_arr.append(self.calculate(pred_edge[i].type(torch.FloatTensor).cuda(3),
-                                           mask_edge[i].type(torch.FloatTensor).cuda(3)))
+            loss_arr.append(self.calculate(pred_edge[i].type(torch.FloatTensor).cuda(),
+                                           mask_edge[i].type(torch.FloatTensor).cuda()))
         return sum(loss_arr) / len(loss_arr)
 
 
@@ -35,14 +35,13 @@ class OhemCELoss(nn.Module):
         self.thresh = -torch.log(torch.tensor(thresh, dtype=torch.float)).cuda()
         self.n_min = n_min
         self.ignore_lb = ignore_lb
-        # 交叉熵
-        self.criteria = nn.CrossEntropyLoss(ignore_index=ignore_lb, reduction='none')
 
     def forward(self, logits, labels):
         N, C, H, W = logits.size()
         # 先做一个交叉熵
-        loss = self.criteria(logits, labels).view(-1)
-        loss, _ = torch.sort(loss, descending=True)
+        criteria = nn.CrossEntropyLoss(ignore_index=self.ignore_lb, reduction='none')
+        loss1 = criteria(logits, labels).view(-1)
+        loss, _ = torch.sort(loss1, descending=True)
         # 这里我看不太明白
         if loss[self.n_min] > self.thresh:
             loss = loss[loss > self.thresh]

@@ -29,9 +29,9 @@ import setproctitle
 setproctitle.setproctitle("train_stdc_camvid_zerorains")
 
 logger = logging.getLogger()
-CUDA_ID = 3
+CUDA_ID = 1
 torch.cuda.set_device(CUDA_ID)
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 def str2bool(v):
@@ -181,7 +181,7 @@ def train():
     # 设置日志文件
     setup_logger(args.respath)
     ## dataset
-    n_classes = 12
+    n_classes = 11
     n_img_per_gpu = args.n_img_per_gpu
     n_workers_train = args.n_workers_train
     n_workers_val = args.n_workers_val
@@ -220,12 +220,12 @@ def train():
                        drop_last=False)
 
     ## model
-    ignore_idx = 0
+    ignore_idx = 255
     net = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path,
                   use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, use_boundary_8=use_boundary_8,
                   use_boundary_16=use_boundary_16, use_conv_last=args.use_conv_last)
-    net.load_state_dict(
-        torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optim_camvid.pth"))
+    # net.load_state_dict(
+    #     torch.load("/home/disk2/ray/workspace/zerorains/stdc/STDC2optim_camvid.pth"))
     # net = torch.load("./checkpoints/train_STDC2-Seg/pths/model_maxmIOU75.pth")
     # print(net)
     # exit(0)
@@ -295,6 +295,8 @@ def train():
             # sampler.set_epoch(epoch)
             diter = iter(dl)
             im, lb = next(diter)
+        lb = lb - 1
+        lb = torch.where(lb == -1, torch.tensor(255), lb)
         #     加入到cuda中
         im = im.cuda(CUDA_ID)
         lb = lb.cuda(CUDA_ID)
@@ -405,7 +407,7 @@ def train():
             logger.info('compute the mIOU')
             with torch.no_grad():
 
-                single_scale2 = MscEvalV0(scale=1, ignore_label=ignore_idx)
+                single_scale2 = MscEvalV0(scale=1, ignore_label=ignore_idx,mode='233')
                 mIOU75 = single_scale2(net, dlval, n_classes)
 
             save_pth = osp.join(save_pth_path, 'model_iter{}__mIOU_{}.pth'

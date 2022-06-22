@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 from logger import setup_logger
 
-from models.model_stages import BiSeNet
+from models.model_stages_msc import BiSeNet
 
 from ade2016challenge import ADE2016Challenge
 from loss.loss import OhemCELoss, RMILoss
@@ -27,12 +27,12 @@ import argparse
 
 import setproctitle
 
-setproctitle.setproctitle("train_stdc_ade_zerorains")
+setproctitle.setproctitle("train_stdc_msc_ade_zerorains")
 
 logger = logging.getLogger()
-CUDA_ID = 3
+CUDA_ID = 2
 torch.cuda.set_device(CUDA_ID)
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 def str2bool(v):
@@ -110,7 +110,7 @@ def parse_args():
         '--respath',
         dest='respath',
         type=str,
-        default="checkpoints/ADE_STDC2-Seg/",
+        default="checkpoints/ADE_msc_STDC2-Seg/",
     )
     # 主干网络
     parse.add_argument(
@@ -233,7 +233,7 @@ def train():
     # 最少需要考虑总数样本的1/16
     n_min = n_img_per_gpu * cropsize[0] * cropsize[1] // 16
 
-    criteria_p = OhemCELoss(thresh=score_thres, n_min=n_min, ignore_lb=ignore_idx)
+    criteria_p = RMILoss(num_classes=n_classes, ignore_lb=ignore_idx)
 
     criteria_16 = OhemCELoss(thresh=score_thres, n_min=n_min, ignore_lb=ignore_idx)
 
@@ -280,7 +280,7 @@ def train():
     diter = iter(dl)
     epoch = 0
 
-    tensor_board_path = os.path.join("./logs", "ade_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
+    tensor_board_path = os.path.join("./logs", "ade_msc_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
     os.mkdir(tensor_board_path)
     visual = SummaryWriter(tensor_board_path)
     for it in range(max_iter):
@@ -403,8 +403,9 @@ def train():
             # ## evaluator
             logger.info('compute the mIOU')
             with torch.no_grad():
+                scales = [0.5, 1.0, 1.5, 2.0]
                 single_scale2 = MscEvalV0(scale=1, ignore_label=ignore_idx, mode='233')
-                mIOU75 = single_scale2(net, dlval, n_classes)
+                mIOU75 = single_scale2(net, dlval, n_classes, scales=scales)
 
             save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU_{}.pth'
                                 .format(it + 1, str(round(mIOU75, 4))))

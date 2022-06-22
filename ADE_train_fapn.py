@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 from logger import setup_logger
 
-from models.model_stages import BiSeNet
+from models.model_stages_FaPN import BiSeNet
 
 from ade2016challenge import ADE2016Challenge
 from loss.loss import OhemCELoss, RMILoss
@@ -27,7 +27,7 @@ import argparse
 
 import setproctitle
 
-setproctitle.setproctitle("train_stdc_ade_zerorains")
+setproctitle.setproctitle("train_stdc_fapn_ade_zerorains")
 
 logger = logging.getLogger()
 CUDA_ID = 3
@@ -110,7 +110,7 @@ def parse_args():
         '--respath',
         dest='respath',
         type=str,
-        default="checkpoints/ADE_STDC2-Seg/",
+        default="checkpoints/ADE_FAPN_STDC2-Seg/",
     )
     # 主干网络
     parse.add_argument(
@@ -280,7 +280,7 @@ def train():
     diter = iter(dl)
     epoch = 0
 
-    tensor_board_path = os.path.join("./logs", "ade_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
+    tensor_board_path = os.path.join("./logs", "ade_fapn_" + '{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S')))
     os.mkdir(tensor_board_path)
     visual = SummaryWriter(tensor_board_path)
     for it in range(max_iter):

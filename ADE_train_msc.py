@@ -57,7 +57,7 @@ def parse_args():
         '--n_workers_train',
         dest='n_workers_train',
         type=int,
-        default=12,
+        default=0,
     )
     parse.add_argument(
         '--n_workers_val',

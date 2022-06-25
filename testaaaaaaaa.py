@@ -1,14 +1,37 @@
-import cv2
-import numpy as np
+import os
+from tqdm import tqdm
+from random import sample
 
-path = f''
-# img1 = cv2.imread("/home/disk2/ray/workspace/zerorains/stdc/data/camvid/labels/0001TP_007260.png", -1)
-# img2 = cv2.imread("/home/disk2/ray/workspace/zerorains/stdc/data/camvid/labels/0001TP_007260.png", -1)
-img1 = cv2.imread("/home/disk2/ray/workspace/zerorains/stdc/data/ADEChallengeData2016/annotations/training/ADE_train_00000344.png", -1)
-img2 = cv2.imread("/home/disk2/ray/workspace/zerorains/stdc/data/ADEChallengeData2016/annotations/training/ADE_train_00000344.png", -1)
-print(np.unique(img1))
-img1[img1 == 150] = 255
-img2[img2 == 0] = 255
-cv2.imwrite('check.png', img1)
-cv2.imwrite('check2.png', img2)
+pwd = f'/home/disk2/ray/datasets/DriveSeg'
+img_path = os.path.join(pwd, 'frames')
+label_path = os.path.join(pwd, 'labels')
+train_path = os.path.join(pwd, 'train.txt')
+test_path = os.path.join(pwd, 'test.txt')
 
+dirs_name = os.listdir(img_path)
+
+data = []
+
+for name in tqdm(dirs_name):
+    if name == '.DS_Store':
+        continue
+    path = os.path.join(img_path, name)
+    files = os.listdir(path)
+    for file_name in files:
+        img = os.path.join(path, file_name)
+        label = img.replace('frames/', 'labels/')
+        if not os.path.exists(img) or not os.path.exists(label):
+            print(label)
+        data.append(f"{img} {label}\n")
+
+index = sample(range(0, len(data)), len(data))
+train = int(len(data) * 0.7)
+test = len(data) - train
+
+with open(train_path, 'w+') as f_train:
+    with open(test_path, 'w+') as f_test:
+        for i in tqdm(range(0, len(data))):
+            if i < train:
+                f_train.write(data[index[i]])
+            else:
+                f_test.write(data[index[i]])

@@ -2,7 +2,7 @@
 # -*- encoding: utf-8 -*-
 
 from logger import setup_logger
-from models.model_stages_msc import BiSeNet
+from models.model_stages_msc_fapn import BiSeNet
 from cityscapes import CityScapes
 from camvid import CamVid
 
@@ -100,6 +100,7 @@ def evaluatev0(respth='./pretrained',
                dspth='./data',
                backbone='STDCNet1446',
                scale=0.75,
+               mode=0,
                use_boundary_2=False,
                use_boundary_4=False,
                use_boundary_8=True,
@@ -151,11 +152,11 @@ def evaluatev0(respth='./pretrained',
     # 开始验证
     with torch.no_grad():
         # 获取验证实例对象
-        single_scale = MscEvalV0(scale=scale, ignore_label=ignore_label)
-        # s = [0.5, 1.0, 1.5, 2.0]
+        single_scale = MscEvalV0(scale=scale, ignore_label=ignore_label, mode=mode)
+        s = [0.5, 1.0]
         # print(s)
         # 输入的参数为，装载好的网络，和装载好的数据集，以及类别数
-        mIOU = single_scale(net, dl, n_classes)
+        mIOU = single_scale(net, dl, n_classes, scales=s)
     # logger = logging.getLogger()
     print('mIOU is: %s\n', mIOU)
 

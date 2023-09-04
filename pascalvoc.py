@@ -17,7 +17,7 @@ from transform import *
 
 class PascalVoc(Dataset):
     # PascalVoc数据集总共有21类，可以用下面的数组进行表示，坐标表示像素值，数据对应标签
-    # lables = ["unlabelled","airplane","bicycle","bird","boat","bottle","bus","car","cat","chair","cow","DiningTable","dog","horse","MotorBike","person","PottedPlant","sheep","sofa","train","monitor"]
+    # lables = ["unlabelled","airplane","bicycle","bird","boat","bottle","bus","car","car","chair","cow","DiningTable","dog","horse","MotorBike","person","PottedPlant","sheep","sofa","train","monitor"]
     # 其中：255位ignore_label，0表示背景即unlabelled
     # 参数为图像的根地址，和随机裁剪的尺寸
     def __init__(self, rootpth, cropsize=(480, 640), mode='train', *args,

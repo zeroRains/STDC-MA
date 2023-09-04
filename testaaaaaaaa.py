@@ -1,37 +1,20 @@
-import os
-from tqdm import tqdm
-from random import sample
+import torch
 
-pwd = f'/home/disk2/ray/datasets/DriveSeg'
-img_path = os.path.join(pwd, 'frames')
-label_path = os.path.join(pwd, 'labels')
-train_path = os.path.join(pwd, 'train.txt')
-test_path = os.path.join(pwd, 'test.txt')
+from models.model_stages import BiSeNet
+from thop import profile
 
-dirs_name = os.listdir(img_path)
+# model = torch.nn.Linear(3, 100)
+# 新模型
+model = BiSeNet(backbone="STDCNet1446", n_classes=12, pretrain_model=None, use_boundary_2=False, use_boundary_4=False,
+                use_boundary_8=True, use_boundary_16=False, use_conv_last=False)
 
-data = []
+print("加载成功")
+model.eval()
+# 原模型的参数文件
 
-for name in tqdm(dirs_name):
-    if name == '.DS_Store':
-        continue
-    path = os.path.join(img_path, name)
-    files = os.listdir(path)
-    for file_name in files:
-        img = os.path.join(path, file_name)
-        label = img.replace('frames/', 'labels/')
-        if not os.path.exists(img) or not os.path.exists(label):
-            print(label)
-        data.append(f"{img} {label}\n")
-
-index = sample(range(0, len(data)), len(data))
-train = int(len(data) * 0.7)
-test = len(data) - train
-
-with open(train_path, 'w+') as f_train:
-    with open(test_path, 'w+') as f_test:
-        for i in tqdm(range(0, len(data))):
-            if i < train:
-                f_train.write(data[index[i]])
-            else:
-                f_test.write(data[index[i]])
+a = torch.rand((1, 3, 960, 540))
+flops, params = profile(model, inputs=(a,))
+print(flops)
+print(params)
+print('FLOPs = ' + str(flops / 1000 ** 3) + 'G')
+print('Params = ' + str(params / 1000 ** 2) + 'M')

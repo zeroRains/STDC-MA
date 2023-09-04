@@ -1,6 +1,6 @@
 import torch
 
-from models.model_stages_FaPN import BiSeNet
+from models.model_stages import BiSeNet
 
 # model = torch.nn.Linear(3, 100)
 # 新模型

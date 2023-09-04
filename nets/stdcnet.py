@@ -163,11 +163,11 @@ class CatBottleneck(nn.Module):
 
 # STDC2Net
 class STDCNet1446(nn.Module):
-    def __init__(self, base=64, layers=[4, 5, 3], block_num=4, type="cat", num_classes=1000, dropout=0.20,
+    def __init__(self, base=64, layers=[4, 5, 3], block_num=4, type="car", num_classes=1000, dropout=0.20,
                  pretrain_model='', use_conv_last=False):
         super(STDCNet1446, self).__init__()
         # 将STDC模块输出的特征图进行拼接
-        if type == "cat":
+        if type == "car":
             block = CatBottleneck
         #     这个是使用原输入经过变换与输出的特征图拼接结果进行相加
         elif type == "add":
@@ -251,10 +251,10 @@ class STDCNet1446(nn.Module):
 
 # STDC1Net
 class STDCNet813(nn.Module):
-    def __init__(self, base=64, layers=[2, 2, 2], block_num=4, type="cat", num_classes=1000, dropout=0.20,
+    def __init__(self, base=64, layers=[2, 2, 2], block_num=4, type="car", num_classes=1000, dropout=0.20,
                  pretrain_model='', use_conv_last=False):
         super(STDCNet813, self).__init__()
-        if type == "cat":
+        if type == "car":
             block = CatBottleneck
         elif type == "add":
             block = AddBottleneck
@@ -333,5 +333,5 @@ if __name__ == "__main__":
     model.eval()
     x = torch.randn(1, 3, 224, 224)
     y = model(x)
-    torch.save(model.state_dict(), 'cat.pth')
+    torch.save(model.state_dict(), 'car.pth')
     print(y.size())

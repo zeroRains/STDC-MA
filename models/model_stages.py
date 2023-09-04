@@ -91,20 +91,6 @@ class ContextPath(nn.Module):
             self.conv_head16 = ConvBNReLU(128, 128, ks=3, stride=1, padding=1)
             self.conv_avg = ConvBNReLU(inplanes, 128, ks=1, stride=1, padding=0)
 
-        elif backbone == 'STDCNet813':
-            self.backbone = STDCNet813(pretrain_model=pretrain_model, use_conv_last=use_conv_last)
-            self.arm16 = AttentionRefinementModule(512, 128)
-            inplanes = 1024
-            if use_conv_last:
-                inplanes = 1024
-            self.arm32 = AttentionRefinementModule(inplanes, 128)
-            self.conv_head32 = ConvBNReLU(128, 128, ks=3, stride=1, padding=1)
-            self.conv_head16 = ConvBNReLU(128, 128, ks=3, stride=1, padding=1)
-            self.conv_avg = ConvBNReLU(inplanes, 128, ks=1, stride=1, padding=0)
-        else:
-            print("backbone is not in backbone lists")
-            exit(0)
-
     def forward(self, x):
         # 获取宽高
         H0, W0 = x.size()[2:]
@@ -199,18 +185,6 @@ class BiSeNet(nn.Module):
             sp8_inplanes = 256
             sp16_inplanes = 512
             inplane = sp8_inplanes + conv_out_inplanes
-
-        elif backbone == 'STDCNet813':
-            conv_out_inplanes = 128
-            sp2_inplanes = 32
-            sp4_inplanes = 64
-            sp8_inplanes = 256
-            sp16_inplanes = 512
-            inplane = sp8_inplanes + conv_out_inplanes
-
-        else:
-            print("backbone is not in backbone lists")
-            exit(0)
         # 特征融合模块
         self.ffm = FeatureFusionModule(inplane, 256)
 

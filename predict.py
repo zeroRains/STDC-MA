@@ -1,6 +1,7 @@
 import json
 
-from models.model_stages_msc_fapn import BiSeNet, FeatureSelectionModule, FeatureAlign_V2, ConvBNReLU
+from models.model_stages_msc_fapn import FeatureSelectionModule, FeatureAlign_V2, ConvBNReLU
+from models.model_stages import BiSeNet
 from cityscapes import CityScapes
 import torchvision.transforms as transforms
 import torch
@@ -141,39 +142,33 @@ def predcited(model_path, output_path):
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
     ])
     n_classes = 19
-    # net = BiSeNet(backbone="STDCNet1446", n_classes=19, pretrain_model=None, use_boundary_2=False,
-    #               use_boundary_4=False, use_boundary_8=True, use_boundary_16=False, use_conv_last=False)
-    # net.load_state_dict(torch.load(model_path, map_location="cpu"))
-    net = torch.load(model_path, map_location='cpu')
-    for name, m in net.named_modules():
-        # if isinstance(m, FeatureAlign_V2):
-        #     m.register_forward_hook(visual)
-        # if isinstance(m, FeatureSelectionModule):
-        #     m.register_forward_hook(visual)
-        if isinstance(m, ConvBNReLU):
-            m.register_forward_hook(visual)
+    net = BiSeNet(backbone="STDCNet1446", n_classes=19, pretrain_model=None, use_boundary_2=False,
+                  use_boundary_4=False, use_boundary_8=True, use_boundary_16=False, use_conv_last=False)
+    net.load_state_dict(torch.load(model_path, map_location="cpu"))
+    # net = torch.load(model_path, map_location='cpu')
+    # for name, m in net.named_modules():
+    #     # if isinstance(m, FeatureAlign_V2):
+    #     #     m.register_forward_hook(visual)
+    #     # if isinstance(m, FeatureSelectionModule):
+    #     #     m.register_forward_hook(visual)
+    #     if isinstance(m, ConvBNReLU):
+    #         m.register_forward_hook(visual)
     # net = BiSeNet(backbone="STDCNet1446", n_classes=19, pretrain_model=None, use_boundary_2=False, use_boundary_4=False,
     #               use_boundary_8=True, use_boundary_16=False, use_conv_last=False)
     # net.load_state_dict(parmas)
     net.eval()
     net.cuda(cuda_id)
     with torch.no_grad():
-        for path in images:
+        for path in tqdm(images):
             img = Image.open(os.path.join(image_path, path)).convert('RGB')
             image = np.array(img)
             img = to_tensor(img)
             img = img.unsqueeze(dim=0)
-            scales = [0.25, 0.5, 1.0, 1.5, 2.0]
-            pre = Predictor()
-            res50 = pre(net, img, n_classes, scales=scales).squeeze(dim=0)
-            pre = Predictor(scale=0.75)
-            res75 = pre(net, img, n_classes, scales=scales).squeeze(dim=0)
-            res50 = res50.cpu().numpy()
+            pre = Predictor(scale=1.0)
+            res75 = pre(net, img, n_classes).squeeze(dim=0)
             res75 = res75.cpu().numpy()
-            color50 = draw_color(res50)
             color75 = draw_color(res75)
-            cv2.imwrite(os.path.join(output_path, "r50", path), color50)
-            cv2.imwrite(os.path.join(output_path, "r75", path), color75)
+            cv2.imwrite(os.path.join(output_path, path), color75)
             print(f"{path} work finished!")
 
 
@@ -191,12 +186,10 @@ if __name__ == '__main__':
     #     color = draw_color(img)
     #     cv2.imwrite(os.path.join(im_path, im), color)
     #     print(f"{im} finished!")
-    model_path = "./checkpoints/MSC_FaPN_RMI_optim_STDC2-Seg/pths/model_maxmIOU50.pth"
-    output_path = "./visiable/msc"
+    model_path = "/home/disk2/ray/workspace/zerorains/stdc/checkpoints/cityscapes_optim_STDC2-Seg/pths/model_final.pth"
+    output_path = "./visiable/bisenet"
     if not os.path.exists(output_path):
         os.mkdir(output_path)
-        os.mkdir(os.path.join(output_path, 'r50'))
-        os.mkdir(os.path.join(output_path, 'r75'))
     print(f"load_model：{model_path}")
     print(f"output_path：{output_path}")
     predcited(model_path, output_path)
